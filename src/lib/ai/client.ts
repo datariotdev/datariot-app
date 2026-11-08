@@ -6,25 +6,6 @@ async function invokeOrvelis(mode: 'chat'|'insight'|'analyze'|'debate', prompt: 
  return data.content;
 }
 function parseOrvelisJSON<T>(s:string):T {return JSON.parse(s.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim()) as T;}
-import OpenAI from 'openai';
-
-// Initialize keys
-const openAIKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
-
-if (!openAIKey) console.warn('[Orvelis] Missing EXPO_PUBLIC_OPENAI_API_KEY — AI will use fallback/mock');
-
-// Lazy initializer for OpenAI to avoid module load-time crashes in browsers
-let _openai: OpenAI | null = null;
-export function getOpenAI(): OpenAI {
-    if (!_openai) {
-        _openai = new OpenAI({
-            apiKey: openAIKey || 'dummy-key',
-            dangerouslyAllowBrowser: true // Required for React Native / Expo
-        });
-    }
-    return _openai;
-}
-
 export interface DailyInsight {
     score: number;
     status: string;
@@ -142,87 +123,10 @@ export interface DeepDiveMessage {
 
 // Generate AI Deep Dive
 export async function generateDeepDive(videoTitle: string, videoDescription: string = ''): Promise<DeepDiveData> {
-    const systemPrompt = "You are Orvelis, the educational AI core of Datariot. Generate a deep-dive educational package. Output valid JSON only.";
-    const userPrompt = `Generate a detailed educational deep-dive for a video titled "${videoTitle}" (Description: "${videoDescription}").
-Return a JSON object with:
-- summary (a detailed 3-5 bullet points explaining the core concepts, theories, and ideas behind this topic)
-- keyTerms (an array of exactly 3 objects: { term: string, definition: string } explaining important scientific, technical, or academic terms related to this topic)
-- recommendations (an array of exactly 3 objects: { title: string, type: "Video" | "Article" | "Podcast", duration?: string, readTime?: string, reason: string } recommending further reading/listening. For Articles use 'readTime', for Video/Podcast use 'duration')`;
-
-    const callGPT = async () => {
-        if (!openAIKey || openAIKey === 'dummy-key') {
-            throw new Error('No OpenAI API key configured');
-        }
-        const completion = await getOpenAI().chat.completions.create({
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: userPrompt }
-            ],
-            model: "gpt-4o",
-            response_format: { type: "json_object" }
-        });
-        const content = completion.choices[0].message.content;
-        return content ? JSON.parse(content) : null;
-    };
-
-    try {
-        return await callGPT();
-    } catch {
-        console.warn("[Orvelis] Deep dive generation failed. Using mock data based on title:", videoTitle);
-        return {
-            summary: `• This topic explores the core principles of ${videoTitle}.\n• It highlights the foundational components and how they interact in complex systems.\n• Understanding these dynamics allows for better critical analysis of current trends and research.\n• The discussion raises important questions about future developments and systemic limitations.`,
-            keyTerms: [
-                { term: "Heuristic", definition: "A mental shortcut that allows people to solve problems and make judgments quickly and efficiently." },
-                { term: "First Principles", definition: "A foundational proposition or assumption that cannot be deduced from any other proposition or assumption." },
-                { term: "Cognitive Load", definition: "The total amount of mental effort being used in the working memory." }
-            ],
-            recommendations: [
-                { id: "rec1", title: "Thinking, Fast and Slow", type: "Article", readTime: "15 min read", reason: "Explores the dual-system brain model and how heuristics shape our logical judgment." },
-                { id: "rec2", title: "First Principles Thinking Explained", type: "Video", duration: "12 min", reason: "A deep-dive video detailing how Elon Musk and historic thinkers deconstruct complex problems." },
-                { id: "rec3", title: "Navigating Information Overload", type: "Podcast", duration: "45 min", reason: "An episode on managing cognitive loads and filtering signal from noise in a hyper-connected age." }
-            ]
-        };
-    }
+ const prompt = `Create a factual educational deep dive about a video titled "${videoTitle}" with description "${videoDescription}". The video itself is not available. Return JSON with summary (string), keyTerms (array of {term, definition}), recommendations (array of {id, title, type, reason, duration?, readTime?}). Do not invent sources or claim to have watched the video.`;
+ return parseOrvelisJSON<DeepDiveData>(await invokeOrvelis('chat', prompt));
 }
 
-// Chat contextually about a video
-export async function chatWithVideo(
-    videoTitle: string,
-    videoDescription: string,
-    message: string,
-    history: DeepDiveMessage[]
-): Promise<string> {
-    const videoSystemPrompt = `You are Orvelis — the educational AI core of Datariot. 
-You are discussing concepts from the video: "${videoTitle}" (Description: "${videoDescription}").
-Your goal is to answer the user's question contextually, using academic/scientific consensus, while keeping in character:
-- Insightful, intellectually stimulating, and concise.
-- Focus on logic and critical thinking.
-- Limit response to 2-3 paragraphs. Use markdown (bold, bullet points) where helpful.`;
-
-    const callGPT = async () => {
-        if (!openAIKey || openAIKey === 'dummy-key') {
-            throw new Error('No OpenAI API key configured');
-        }
-        const completion = await getOpenAI().chat.completions.create({
-            messages: [
-                { role: "system", content: videoSystemPrompt },
-                ...history,
-                { role: "user", content: message }
-            ],
-            model: "gpt-4o",
-        });
-        return completion.choices[0].message.content || "";
-    };
-
-    try {
-        return await callGPT();
-    } catch {
-        console.warn("[Orvelis] Offline chat fallback for video:", videoTitle);
-        return `Regarding **${videoTitle}**, that's a fascinating question. 
-        
-Under local operating conditions, I'd say the core principle involves analyzing the hidden assumptions in this video's topic. Usually, critical thinkers should verify the backing data and search for logical fallacies, such as false equivalency or correlation-саusation confusion.
-
-What specific aspect of this topic would you like to deconstruct further?`;
-    }
+export async function chatWithVideo(videoTitle: string, videoDescription: string, message: string, history: DeepDiveMessage[]): Promise<string> {
+ return invokeOrvelis('chat', `Video title: ${videoTitle}\nDescription: ${videoDescription}\nQuestion: ${message}\nOnly the title and description are available; do not claim to have watched the video.`, history.filter(x=>x.role==='user'||x.role==='assistant'));
 }
-
