@@ -1,0 +1,129 @@
+{
+    "cleanUrls": false,
+    "rewrites": [
+        {
+            "source": "/",
+            "has": [
+                {
+                    "type": "host",
+                    "value": "docs.datariot.xyz"
+                }
+            ],
+            "destination": "/docs.html"
+        },
+        {
+            "source": "/:path*",
+            "has": [
+                {
+                    "type": "host",
+                    "value": "docs.datariot.xyz"
+                }
+            ],
+            "destination": "/datariot-docs/:path*"
+        },
+        {
+            "source": "/",
+            "has": [
+                {
+                    "type": "host",
+                    "value": "info.datariot.xyz"
+                }
+            ],
+            "destination": "/info.html"
+        },
+        {
+            "source": "/:path*",
+            "has": [
+                {
+                    "type": "host",
+                    "value": "info.datariot.xyz"
+                }
+            ],
+            "destination": "/datariot-info/:path*"
+        },
+        {
+            "source": "/",
+            "has": [
+                {
+                    "type": "host",
+                    "value": "datariot.xyz"
+                }
+            ],
+            "destination": "/xyz.html"
+        },
+        {
+            "source": "/_expo/:path*",
+            "has": [
+                {
+                    "type": "host",
+                    "value": "datariot.xyz"
+                }
+            ],
+            "destination": "/datariot-xyz/_expo/:path*"
+        },
+        {
+            "source": "/assets/:path*",
+            "has": [
+                {
+                    "type": "host",
+                    "value": "datariot.xyz"
+                }
+            ],
+            "destination": "/datariot-xyz/assets/:path*"
+        },
+        {
+            "source": "/favicon.ico",
+            "has": [
+                {
+                    "type": "host",
+                    "value": "datariot.xyz"
+                }
+            ],
+            "destination": "/datariot-xyz/favicon.ico"
+        },
+        {
+            "source": "/metadata.json",
+            "has": [
+                {
+                    "type": "host",
+                    "value": "datariot.xyz"
+                }
+            ],
+            "destination": "/datariot-xyz/metadata.json"
+        },
+        {
+            "source": "/:path*",
+            "has": [
+                {
+                    "type": "host",
+                    "value": "datariot.xyz"
+                }
+            ],
+            "destination": "/xyz.html"
+        },
+        {
+            "source": "/_expo/:path*",
+            "destination": "/datariot-xyz/_expo/:path*"
+        },
+        {
+            "source": "/assets/:path*",
+            "destination": "/datariot-xyz/assets/:path*"
+        },
+        {
+            "source": "/favicon.ico",
+            "destination": "/datariot-xyz/favicon.ico"
+        },
+        {
+            "source": "/metadata.json",
+            "destination": "/datariot-xyz/metadata.json"
+        },
+        {
+            "source": "/",
+            "destination": "/xyz.html"
+        },
+        {
+            "source": "/:path*",
+            "destination": "/xyz.html"
+        }
+    ]
+}
