@@ -19,7 +19,6 @@ jobs:
           cache: npm
       - name: Repair and validate dependency lockfile
         run: |
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
           npm ci --ignore-scripts --no-audit --no-fund
       - name: TypeScript check
         run: npx tsc --noEmit
