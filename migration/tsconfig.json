@@ -1,0 +1,39 @@
+{
+    "extends": "expo/tsconfig.base",
+    "compilerOptions": {
+        "strict": true,
+        "baseUrl": ".",
+        "jsx": "react-native",
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "paths": {
+            "@/*": [
+                "./src/*"
+            ],
+            "@components/*": [
+                "./src/components/*"
+            ],
+            "@screens/*": [
+                "./src/screens/*"
+            ],
+            "@lib/*": [
+                "./src/lib/*"
+            ],
+            "@design-system/*": [
+                "./src/design-system/*"
+            ],
+            "@utils/*": [
+                "./src/utils/*"
+            ],
+            "@store/*": [
+                "./src/store/*"
+            ]
+        }
+    },
+    "include": [
+        "**/*.ts",
+        "**/*.tsx",
+        ".expo/types/**/*.ts",
+        "expo-env.d.ts"
+    ]
+}
