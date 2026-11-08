@@ -1,5 +1,13 @@
 # Datariot App
 
+> The cross-platform Datariot experience — short videos, creators, discovery and meaningful conversations.
+
+[**Datariot**](https://datariot.xyz) · [**Documentation**](https://info.datariot.xyz) · [**GitHub**](https://github.com/datariotdev)
+
+**Project:** [https://datariot.xyz](https://datariot.xyz)
+
+---
+
 Mobile and desktop application (Expo / React Native / Expo Web).
 
 ## Migration status
