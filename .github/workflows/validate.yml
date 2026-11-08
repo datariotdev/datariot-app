@@ -17,5 +17,9 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: npm ci
-      - run: npx tsc --noEmit
+      - name: Repair and validate dependency lockfile
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: TypeScript check
+        run: npx tsc --noEmit
