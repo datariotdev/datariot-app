@@ -44,6 +44,13 @@ interface UseVideosProps {
     sort?: 'recent' | 'popular';
 }
 
+// This retired S3 bucket returns NoSuchBucket for both videos and thumbnails.
+const retiredVideoHost = /^https?:\/\/clipto-videos\.s3\.eu-north-1\.amazonaws\.com(?:\/|$)/i;
+
+function getPlaybackUrl(video: { url?: string | null; s3_url?: string | null }) {
+    return [video.url?.trim(), video.s3_url?.trim()].find(url => url && !retiredVideoHost.test(url));
+}
+
 export function useVideos({ type, userId, searchQuery, hashtag, category, sort = 'recent' }: UseVideosProps) {
     const { user } = useAuth();
     const [videos, setVideos] = useState<Video[]>([]);
@@ -67,7 +74,7 @@ export function useVideos({ type, userId, searchQuery, hashtag, category, sort =
 
         return {
             id: video.id,
-            videoUrl: encodeVideoUrl(video.url || video.s3_url) || '',
+            videoUrl: encodeVideoUrl(getPlaybackUrl(video)) || '',
             title: finalTitle,
             description: video.description || '',
             author: authorName,
@@ -176,7 +183,7 @@ export function useVideos({ type, userId, searchQuery, hashtag, category, sort =
 
             // Fetch Logic Stats (Who's Winning) for these videos
             const fetchLogicStatsPromise = (async () => {
-                const urls = videoData.map((v: any) => v.url || v.s3_url).filter(Boolean);
+                const urls = videoData.map(getPlaybackUrl).filter(Boolean);
                 if (urls.length === 0) return {};
 
                 // 1. Find posts matching these video URLs
@@ -242,7 +249,7 @@ export function useVideos({ type, userId, searchQuery, hashtag, category, sort =
             const formattedVideos = videoData
                 .map((v: any) => {
                     const formatted = formatVideo(v, profilesMap[v.user_id], likedVideoIds.has(v.id));
-                    const videoUrl = v.url || v.s3_url;
+                    const videoUrl = getPlaybackUrl(v);
                     if (videoUrl && videoLogicMap[videoUrl]) {
                         formatted.logicStats = videoLogicMap[videoUrl];
                     }

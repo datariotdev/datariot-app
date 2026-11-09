@@ -1,13 +1,11 @@
 import React, { useEffect } from 'react';
 import { Tabs } from 'expo-router';
 import { setAudioModeAsync } from 'expo-audio';
-import { Feather, SimpleLineIcons, Ionicons, MaterialCommunityIcons, Entypo } from '@expo/vector-icons';
-import { View, Dimensions, Platform, useWindowDimensions, StyleSheet } from 'react-native';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { View, Platform, useWindowDimensions } from 'react-native';
 import { ResponsiveLayout } from '../../components/Layout/ResponsiveLayout';
 import { useTheme } from '../../components/Theme/ThemeProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const TabLayout = () => {
     useEffect(() => {
@@ -27,8 +25,10 @@ const TabLayout = () => {
     const { width } = useWindowDimensions();
     const insets = useSafeAreaInsets();
     const bottomInset = Math.max(insets.bottom, 8);
-    const { theme, mode } = useTheme();
+    const { mode } = useTheme();
     const isDark = mode === 'dark';
+    const activeTabColor = isDark ? '#E1E8F5' : '#293548';
+    const inactiveTabColor = isDark ? '#A0ACBE' : '#586579';
     const isDesktopWeb = Platform.OS === 'web' && width > 768;
 
     return (
@@ -39,8 +39,9 @@ const TabLayout = () => {
                     // Let the layout's HUD backdrop show through instead of the
                     // navigator's default light scene background.
                     sceneStyle: { backgroundColor: 'transparent' },
-                    tabBarActiveTintColor: theme.colors.primary.DEFAULT,
-                    tabBarInactiveTintColor: isDark ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0,0,0,0.4)',
+                    tabBarActiveTintColor: activeTabColor,
+                    tabBarInactiveTintColor: inactiveTabColor,
+                    tabBarShowLabel: false,
                     tabBarStyle: {
                         display: isDesktopWeb ? 'none' : 'flex',
                         position: 'absolute',
@@ -59,12 +60,9 @@ const TabLayout = () => {
                         shadowOffset: { width: 0, height: 0 },
                         shadowRadius: 0,
                         paddingBottom: bottomInset,
-                        paddingTop: 4,
+                        paddingTop: 12,
                     },
                     tabBarBackground: () => null,
-                    tabBarLabelStyle: {
-                        display: 'none',
-                    },
                     tabBarItemStyle: {
                         flex: 1,
                         alignItems: 'center',
@@ -76,13 +74,12 @@ const TabLayout = () => {
                 <Tabs.Screen
                     name="index"
                     options={{
-                        title: '',
+                        title: 'Home',
                         tabBarIcon: ({ focused, color }) => (
                             <MaterialCommunityIcons
                                 name={focused ? "home-variant" : "home-variant-outline"}
                                 size={24}
                                 color={color}
-                                style={{ opacity: focused ? 1 : 0.8 }}
                             />
                         ),
                     }}
@@ -90,7 +87,7 @@ const TabLayout = () => {
                 <Tabs.Screen
                     name="discover"
                     options={{
-                        title: '',
+                        title: 'Discover',
                         tabBarIcon: ({ focused, color }) => (
                             <Ionicons
                                 name={focused ? "navigate-circle" : "navigate-circle-outline"}
@@ -103,16 +100,16 @@ const TabLayout = () => {
                 <Tabs.Screen
                     name="create"
                     options={{
-                        title: '',
-                        tabBarIcon: ({ focused }) => (
+                        title: 'Create',
+                        tabBarIcon: () => (
                             <View style={{
                                 width: 44,
                                 height: 44,
                                 borderRadius: 22,
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                backgroundColor: theme.colors.primary.DEFAULT,
-                                shadowColor: theme.colors.primary.DEFAULT,
+                                backgroundColor: activeTabColor,
+                                shadowColor: activeTabColor,
                                 shadowOffset: { width: 0, height: 4 },
                                 shadowOpacity: 0.3,
                                 shadowRadius: 8,
@@ -121,7 +118,7 @@ const TabLayout = () => {
                                 <Feather
                                     name="plus"
                                     size={22}
-                                    color="#000000"
+                                    color={isDark ? '#293548' : '#F7F9FC'}
                                 />
                             </View>
                         ),
@@ -130,7 +127,7 @@ const TabLayout = () => {
                 <Tabs.Screen
                     name="ai"
                     options={{
-                        title: '',
+                        title: 'Orvelis AI',
                         tabBarIcon: ({ focused, color }) => (
                             <MaterialCommunityIcons
                                 name={focused ? "robot-excited" : "robot-excited-outline"}
@@ -143,13 +140,12 @@ const TabLayout = () => {
                 <Tabs.Screen
                     name="inbox"
                     options={{
-                        title: '',
+                        title: 'Inbox',
                         tabBarIcon: ({ focused, color }) => (
                             <Ionicons
                                 name={focused ? "chatbubble-ellipses" : "chatbubble-ellipses-outline"}
                                 size={24}
                                 color={color}
-                                style={{ opacity: focused ? 1 : 0.8 }}
                             />
                         ),
                     }}
