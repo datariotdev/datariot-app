@@ -68,62 +68,14 @@ export default function InboxScreen() {
         }
     };
 
-    const startChat = async (targetUser: Profile) => {
+    const startChat = (targetUser: Profile) => {
         if (!user) return;
-        try {
-            // Check if we already have a chat with this user locally
-            const existingChat = chats.find(c => c.id === targetUser.id);
-            let chatId = existingChat?.chat_id;
-
-            if (!chatId) {
-                // Determine a consistent chat ID structure or attempt creation
-                const { data: newChat, error: createError } = await supabase
-                    .from('chats')
-                    .insert({ type: 'direct' })
-                    .select('id')
-                    .single();
-
-                if (createError) throw createError;
-                chatId = newChat.id;
-
-                // Attempt to insert participants one by one to avoid total failure if one is blocked by RLS
-                // First, add yourself (should usually work due to RLS)
-                const { error: selfError } = await supabase
-                    .from('chat_participants')
-                    .insert({ chat_id: chatId, user_id: user.id });
-
-                if (selfError) {
-                    console.error('Error adding self as participant:', selfError.message);
-                }
-
-                // Then try to add the other person
-                const { error: otherError } = await supabase
-                    .from('chat_participants')
-                    .insert({ chat_id: chatId, user_id: targetUser.id });
-
-                if (otherError) {
-                    console.log('Note: Could not add other participant via RLS (common), proceeding anyway.');
-                }
-            }
-
-            // Close search and go to chat
-            setIsSearching(false);
-            setSearchQuery('');
-            router.push({
-                pathname: `/chat/[id]` as any,
-                params: { id: chatId, name: targetUser.display_name || targetUser.username, userId: targetUser.id }
-            });
-
-        } catch (error) {
-            console.error('Error starting chat:', error);
-            // Fallback: If creation completely fails, use the targetUser ID to let useMessages try its fallback
-            setIsSearching(false);
-            setSearchQuery('');
-            router.push({
-                pathname: `/chat/[id]` as any,
-                params: { id: targetUser.id, name: targetUser.display_name || targetUser.username, userId: targetUser.id }
-            });
-        }
+        setIsSearching(false);
+        setSearchQuery('');
+        router.push({
+            pathname: '/chat/[id]',
+            params: { id: targetUser.id, userId: targetUser.id, name: targetUser.display_name || targetUser.username },
+        });
     };
 
     const handleChatPress = (id: string, name?: string) => {

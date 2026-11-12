@@ -1,271 +1,121 @@
 import { useState, useEffect, useCallback } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../client';
 import { useAuth } from './useAuth';
 
-console.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
-console.log('!!! USE_MESSAGES_HOOK_LOADED_VERSION_DEBUG_01 !!!');
-console.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
-
-export interface ChatMessage {
+type MessageRow = {
     id: string;
     chat_id: string;
-    sender_id: string;
-    content: string;
+    sender_id: string | null;
+    content: string | null;
     media_url: string | null;
     media_type: 'image' | 'video' | 'audio' | null;
     created_at: string;
-    // Client-side properties
-    sender: 'me' | 'them';
-    time: string;
+};
+
+type ChatMessage = MessageRow & { sender: 'me' | 'them'; time: string };
+
+type Conversation = {
+    scope: string;
+    id: string | null;
+    messages: ChatMessage[];
+    error: string | null;
+};
+
+function formatMessage(message: MessageRow, userId: string): ChatMessage {
+    return {
+        ...message,
+        sender: message.sender_id === userId ? 'me' : 'them',
+        time: new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
 }
 
-export function useMessages(chatId: string) {
-    const { user } = useAuth();
-    const [messages, setMessages] = useState<ChatMessage[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+export function useMessages(chatId: string, recipientId?: string) {
+    const { user, loading: authLoading } = useAuth();
+    const userId = user?.id;
+    const [conversation, setConversation] = useState<Conversation | null>(null);
+    const [attempt, setAttempt] = useState(0);
+    const scope = JSON.stringify([userId, chatId, recipientId, attempt]);
+    const current = conversation?.scope === scope ? conversation : null;
 
-    // We need a ref to track the REAL chat ID if we create it on the fly
-    const [activeChatId, setActiveChatId] = useState<string>(chatId);
+    const appendMessage = useCallback((message: ChatMessage) => {
+        setConversation(previous => {
+            if (previous?.scope !== scope || previous.messages.some(item => item.id === message.id)) return previous;
+            return { ...previous, messages: [...previous.messages, message] };
+        });
+    }, [scope]);
 
-    // Keep activeChatId in sync if the prop changes
     useEffect(() => {
-        setActiveChatId(chatId);
-    }, [chatId]);
-
-    const fetchMessages = useCallback(async () => {
-        if (!user || !activeChatId) {
-            setLoading(false);
+        if (authLoading) return;
+        if (!userId || !supabase) {
+            setConversation({ scope, id: null, messages: [], error: 'Sign in to open this conversation.' });
             return;
         }
 
-        try {
-            setLoading(true);
-            setError(null);
+        let active = true;
+        let channel: RealtimeChannel | undefined;
+        const pending: ChatMessage[] = [];
+        let initialLoadDone = false;
 
-            // Fetch messages for the specific chat
-            const { data, error: fetchError } = await supabase
-                .from('messages')
-                .select('*')
-                .eq('chat_id', activeChatId)
-                .order('created_at', { ascending: true }); // older on top
+        async function loadConversation(senderId: string) {
+            try {
+                const id = recipientId
+                    ? await supabase.rpc('get_or_create_direct_chat', { recipient_id: recipientId })
+                    : await supabase.from('chats').select('id').eq('id', chatId).maybeSingle();
+                const resolvedId = recipientId ? id.data : id.data?.id;
+                if (id.error || typeof resolvedId !== 'string') throw id.error ?? new Error('Chat unavailable');
+                if (!active) return;
 
-            if (fetchError) {
-                // If the activeChatId is actually a user ID because we came from a profile,
-                // this might fail or return empty gracefully. We tolerate it.
-                if (fetchError.code === '22P02') {
-                    // Invalid UUID syntax could happen, but we assume it's valid UUID format
-                    setMessages([]);
-                    return;
-                }
+                channel = supabase.channel(`messages:${resolvedId}`)
+                    .on('postgres_changes', {
+                        event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${resolvedId}`,
+                    }, ({ new: row }: { new: MessageRow }) => {
+                        if (!active) return;
+                        const message = formatMessage(row, senderId);
+                        if (initialLoadDone) appendMessage(message);
+                        else pending.push(message);
+                    })
+                    .subscribe();
+
+                const { data, error } = await supabase.from('messages').select('*')
+                    .eq('chat_id', resolvedId).order('created_at');
+                if (error) throw error;
+                if (!active) return;
+
+                const history = ((data ?? []) as MessageRow[]).map(row => formatMessage(row, senderId));
+                const byId = new Map([...history, ...pending].map(message => [message.id, message]));
+                const messages = [...byId.values()].sort((a, b) => a.created_at.localeCompare(b.created_at));
+                setConversation({ scope, id: resolvedId, messages, error: null });
+                initialLoadDone = true;
+            } catch (error) {
+                if (!active) return;
+                console.warn('Could not open conversation:', error);
+                setConversation({ scope, id: null, messages: [], error: 'Couldn’t open this conversation.' });
             }
-
-            if (data) {
-                const formatted: ChatMessage[] = data.map((msg: any) => ({
-                    ...msg,
-                    sender: msg.sender_id === user.id ? 'me' : 'them',
-                    time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                }));
-                setMessages(formatted);
-            } else {
-                setMessages([]);
-            }
-        } catch (err: any) {
-            console.error('Error fetching messages for chatId:', activeChatId);
-            console.error('Details:', err?.message || err);
-            // Don't show hard error if it's just a missing chat room
-            setMessages([]);
-        } finally {
-            setLoading(false);
         }
-    }, [user, activeChatId]);
 
-    useEffect(() => {
-        fetchMessages();
-
-        if (!user || !activeChatId) return;
-
-        // Subscribing to real-time new messages
-        const channel = supabase.channel(`chat_${activeChatId}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'messages',
-                    filter: `chat_id=eq.${activeChatId}`
-                },
-                (payload: any) => {
-                    const newMsg = payload.new;
-                    setMessages(prev => {
-                        // Prevent duplicates
-                        if (prev.find(m => m.id === newMsg.id)) return prev;
-
-                        return [...prev, {
-                            ...newMsg,
-                            sender: newMsg.sender_id === user.id ? 'me' : 'them',
-                            time: new Date(newMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                        }];
-                    });
-                }
-            )
-            .subscribe();
-
+        void loadConversation(userId);
         return () => {
-            supabase.removeChannel(channel);
+            active = false;
+            if (channel) void supabase.removeChannel(channel);
         };
-    }, [fetchMessages, user, activeChatId]);
+    }, [authLoading, userId, chatId, recipientId, scope, appendMessage]);
 
-    const ensureChatRoom = async (targetUserId: string): Promise<string | null> => {
-        const { data: { session } } = await supabase.auth.getSession();
-        console.log("[JIT Chat] Session active:", !!session);
-        console.log("[JIT Chat] Auth User ID:", session?.user?.id);
-
-        if (!user || user.id !== session?.user?.id) {
-            console.warn("[JIT Chat] User mismatch or missing:", user?.id, session?.user?.id);
-        }
-        if (!user) return null;
-
-        try {
-            console.log("[JIT Chat] Verifying destination:", targetUserId);
-
-            // 1. Is it already a valid chat room? 
-            const { data: chatRoom } = await supabase
-                .from('chats')
-                .select('id')
-                .eq('id', targetUserId)
-                .single();
-
-            if (chatRoom) {
-                console.log("[JIT Chat] Destination is already a valid chat room ID.");
-                return targetUserId;
-            }
-
-            // 2. Search for an EXISTING chat between us
-            const { data: myParticipations } = await supabase
-                .from('chat_participants')
-                .select('chat_id')
-                .eq('user_id', user.id);
-
-            if (myParticipations && myParticipations.length > 0) {
-                const myChatIds = myParticipations.map((p: { chat_id: string }) => p.chat_id);
-                const { data: commonParticipations } = await supabase
-                    .from('chat_participants')
-                    .select('chat_id')
-                    .in('chat_id', myChatIds)
-                    .eq('user_id', targetUserId);
-
-                if (commonParticipations && commonParticipations.length > 0) {
-                    const existingChatId = commonParticipations[0].chat_id;
-                    console.log("[JIT Chat] Found existing shared chat room:", existingChatId);
-                    return existingChatId;
-                }
-            }
-
-            // 3. Last resort: Create a new room
-            console.log("[JIT Chat] No existing room found. Attempting to create...");
-            const { data: newChat, error: createError } = await supabase
-                .from('chats')
-                .insert({ type: 'direct' })
-                .select('id')
-                .single();
-
-            if (createError) {
-                console.warn("[JIT Chat] RLS blocks chat creation:", createError.message);
-                return null;
-            }
-
-            const newChatId = newChat.id;
-            console.log("[JIT Chat] Room created:", newChatId);
-
-            // Add participants
-            await supabase.from('chat_participants').insert([
-                { chat_id: newChatId, user_id: user.id },
-                { chat_id: newChatId, user_id: targetUserId }
-            ]);
-
-            return newChatId;
-        } catch (err) {
-            console.error('[JIT Chat] Unexpected error:', err);
-            return null;
-        }
-    };
-
-    const sendMessage = async (content: string, mediaUrl: string | null = null, mediaType: string | null = null) => {
-        if (!user || !activeChatId) return;
-
-        let workingChatId = activeChatId;
-
-        try {
-            if (messages.length === 0) {
-                console.log("[JIT Chat] No messages, checking room...");
-                const realId = await ensureChatRoom(activeChatId);
-                if (realId) {
-                    workingChatId = realId;
-                    if (realId !== activeChatId) {
-                        setActiveChatId(realId);
-                    }
-                }
-            }
-        } catch (err) {
-            console.error("[JIT Chat] Hook error:", err);
-        }
-
-        console.log("[JIT Chat] User:", user?.id);
-        console.log("[JIT Chat] Inserting message to:", workingChatId);
-
-        // Optimistic update
-        const tempId = Date.now().toString();
-        const optimisticMsg: ChatMessage = {
-            id: tempId,
-            chat_id: workingChatId,
-            sender_id: user.id,
-            content,
-            media_url: mediaUrl,
-            media_type: mediaType as any,
-            created_at: new Date().toISOString(),
-            sender: 'me',
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-
-        setMessages(prev => [...prev, optimisticMsg]);
-
-        try {
-            const { data, error } = await supabase
-                .from('messages')
-                .insert({
-                    chat_id: workingChatId,
-                    sender_id: user.id,
-                    content,
-                    media_url: mediaUrl,
-                    media_type: mediaType
-                })
-                .select()
-                .single();
-
-            if (error) {
-                console.error("Supabase insert error details:", error);
-                throw error;
-            }
-
-            // Replace optimistic with real
-            setMessages(prev => prev.map(m => m.id === tempId ? {
-                ...data,
-                sender: 'me',
-                time: new Date(data.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            } : m));
-
-        } catch (error) {
-            console.error('Error sending message completely:', error);
-            // Revert optimistic on fail
-            setMessages(prev => prev.filter(m => m.id !== tempId));
-        }
+    const sendMessage = async (content: string, mediaUrl: string | null = null, mediaType: MessageRow['media_type'] = null) => {
+        if (!current?.id || !userId || !supabase) throw new Error('Chat unavailable');
+        const { data, error } = await supabase.from('messages').insert({
+            chat_id: current.id, sender_id: userId, content, media_url: mediaUrl, media_type: mediaType,
+        }).select().single();
+        if (error) throw error;
+        appendMessage(formatMessage(data as MessageRow, userId));
     };
 
     return {
-        messages,
-        loading,
-        error,
-        sendMessage
+        chatId: current?.id ?? null,
+        messages: current?.messages ?? [],
+        loading: !current,
+        error: current?.error ?? null,
+        retry: () => setAttempt(value => value + 1),
+        sendMessage,
     };
 }
