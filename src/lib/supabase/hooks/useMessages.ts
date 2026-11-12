@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import { AppState } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../client';
 import { useAuth } from './useAuth';
@@ -37,6 +39,7 @@ export function useMessages(chatId: string, recipientId?: string) {
     const [attempt, setAttempt] = useState(0);
     const scope = JSON.stringify([userId, chatId, recipientId, attempt]);
     const current = conversation?.scope === scope ? conversation : null;
+    const resolvedChatId = current?.id;
 
     const appendMessage = useCallback((message: ChatMessage) => {
         setConversation(previous => {
@@ -100,6 +103,39 @@ export function useMessages(chatId: string, recipientId?: string) {
             if (channel) void supabase.removeChannel(channel);
         };
     }, [authLoading, userId, chatId, recipientId, scope, appendMessage]);
+
+    useFocusEffect(useCallback(() => {
+        if (!resolvedChatId || !userId || !supabase) return;
+        let active = true;
+        let refreshing = false;
+        const refresh = async () => {
+            if (refreshing || AppState.currentState === 'background' || AppState.currentState === 'inactive') return;
+            refreshing = true;
+            try {
+                const { data, error } = await supabase.from('messages').select('*')
+                    .eq('chat_id', resolvedChatId).order('created_at', { ascending: false }).limit(100);
+                if (error || !active) return;
+                const recent = ((data ?? []) as MessageRow[]).map(row => formatMessage(row, userId));
+                setConversation(previous => {
+                    if (previous?.scope !== scope) return previous;
+                    const known = new Set(previous.messages.map(message => message.id));
+                    const incoming = recent.filter(message => !known.has(message.id));
+                    if (!incoming.length) return previous;
+                    const messages = [...previous.messages, ...incoming].sort((a, b) => a.created_at.localeCompare(b.created_at));
+                    return { ...previous, messages };
+                });
+            } catch {
+                // A transient refresh failure leaves the current conversation visible.
+            } finally {
+                refreshing = false;
+            }
+        };
+        const timer = setInterval(() => { void refresh(); }, 8000);
+        return () => {
+            active = false;
+            clearInterval(timer);
+        };
+    }, [resolvedChatId, scope, userId]));
 
     const sendMessage = async (content: string, mediaUrl: string | null = null, mediaType: MessageRow['media_type'] = null) => {
         if (!current?.id || !userId || !supabase) throw new Error('Chat unavailable');

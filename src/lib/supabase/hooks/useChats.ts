@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { AppState } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { supabase } from '../client';
 import { useAuth } from './useAuth';
 
@@ -29,7 +31,7 @@ export function useChats() {
     const [loading, setLoading] = useState(true);
     const request = useRef(0);
 
-    const fetchChats = useCallback(async () => {
+    const fetchChats = useCallback(async (quiet = false) => {
         const sequence = ++request.current;
         if (authLoading) return;
         if (!userId || !supabase) {
@@ -38,7 +40,7 @@ export function useChats() {
             return;
         }
 
-        setLoading(true);
+        if (!quiet) setLoading(true);
         try {
             // The chat and message policies limit this list to the user's memberships.
             const { data, error } = await supabase.from('chats')
@@ -80,14 +82,24 @@ export function useChats() {
         if (!userId || !supabase) return;
 
         const channel = supabase.channel(`inbox:${userId}`)
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => { void fetchChats(); })
-            .subscribe((status: string) => { if (status === 'SUBSCRIBED') void fetchChats(); });
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => { void fetchChats(true); })
+            .subscribe((status: string) => { if (status === 'SUBSCRIBED') void fetchChats(true); });
 
         return () => {
             request.current++;
             void supabase.removeChannel(channel);
         };
     }, [fetchChats, userId]);
+
+    useFocusEffect(useCallback(() => {
+        if (!userId || !supabase) return;
+        const refresh = () => {
+            if (AppState.currentState !== 'background' && AppState.currentState !== 'inactive') void fetchChats(true);
+        };
+        refresh();
+        const timer = setInterval(refresh, 8000);
+        return () => clearInterval(timer);
+    }, [fetchChats, userId]));
 
     return { chats, loading, refetch: fetchChats };
 }
