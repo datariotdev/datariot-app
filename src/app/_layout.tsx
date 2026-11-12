@@ -4,7 +4,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { ThemeProvider, useTheme } from '../components/Theme/ThemeProvider';
+import { lightColors, ThemeProvider, useTheme } from '../components/Theme/ThemeProvider';
 import * as SplashScreen from 'expo-splash-screen';
 import {
     useFonts,
@@ -110,6 +110,10 @@ function AppContent() {
                     <Stack screenOptions={{ contentStyle: { backgroundColor: '#08090D' } }}>
                         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                         <Stack.Screen name="user/[id]" options={{ headerShown: false }} />
+                        <Stack.Screen name="edit-profile" options={{
+                            headerShown: false,
+                            contentStyle: { backgroundColor: lightColors.background.primary },
+                        }} />
                         <Stack.Screen name="auth" options={{ headerShown: false }} />
                         <Stack.Screen name="editor" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
                     </Stack>

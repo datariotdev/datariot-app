@@ -31,7 +31,7 @@ const ThemeContext = createContext<ThemeContextType>(defaultContext);
 
 const darkColors = { ...baseTheme.colors };
 
-const lightColors = {
+export const lightColors = {
     ...baseTheme.colors,
     primary: {
         DEFAULT: '#4C6EF5', // Premium high-contrast Royal Blue
