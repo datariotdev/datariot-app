@@ -14,15 +14,18 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from '@components/UI/SafeAreaView';
-import { theme } from '@design-system/theme';
+import { lightColors } from '@components/Theme/ThemeProvider';
 import { Ionicons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '@lib/supabase/hooks/useAuth';
 import { supabase } from '@lib/supabase/client';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 
-export default function Page() {
+const { background, primary, surface, text } = lightColors;
+
+export default function EditProfile() {
     const router = useRouter();
     const { user } = useAuth();
     const [loading, setLoading] = useState(false);
@@ -258,118 +261,69 @@ export default function Page() {
         }
     };
 
-    const monoFont = { fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' };
+    const busy = loading || uploadingAvatar || uploadingHeader;
+    const initial = (displayName.trim()[0] || username.trim()[0] || user?.email?.[0] || 'U').toUpperCase();
 
     return (
-        <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
-                <Pressable onPress={() => router.back()} style={styles.cancelButton}>
-                    <Text style={[styles.cancelText, monoFont]}>[ CANCEL ]</Text>
+        <SafeAreaView style={styles.screen}>
+            <StatusBar style="dark" />
+            <View style={styles.toolbar}>
+                <Pressable accessibilityRole="button" accessibilityLabel="Go back"
+                    onPress={() => router.back()} style={styles.back}>
+                    <Ionicons name="arrow-back" size={22} color={text.primary} />
                 </Pressable>
-                <Text style={[styles.headerTitle, monoFont]}>[ EDIT PROFILE ]</Text>
-                <Pressable
-                    onPress={updateProfile}
-                    style={[styles.saveButton, loading && styles.disabledButton]}
-                    disabled={loading}
-                >
-                    {(loading || uploadingAvatar || uploadingHeader) ? (
-                        <ActivityIndicator color="white" size="small" />
-                    ) : (
-                        <Text style={[styles.saveText, monoFont]}>[ SAVE ]</Text>
-                    )}
+                <Text accessibilityRole="header" numberOfLines={1} style={styles.title}>Edit profile</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel="Save profile"
+                    accessibilityState={{ disabled: busy, busy }} onPress={updateProfile}
+                    style={styles.save} disabled={busy}>
+                    {busy ? <ActivityIndicator color={text.primary} size="small" />
+                        : <Text style={styles.actionText}>Save</Text>}
                 </Pressable>
             </View>
 
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={{ flex: 1 }}
-            >
-                <ScrollView contentContainerStyle={styles.content}>
-                    {/* Header Image Section */}
-                    <View style={styles.headerImageSection}>
-                        <Pressable onPress={() => pickImage('header')} style={styles.headerImageContainer} disabled={uploadingHeader}>
-                            {headerPreview ? (
-                                <View style={{ flex: 1 }}>
-                                    <Image source={{ uri: headerPreview }} style={styles.headerImage} />
-                                    {uploadingHeader && (
-                                        <View style={[StyleSheet.absoluteFill, styles.imageLoadingOverlay]}>
-                                            <ActivityIndicator color="white" />
-                                        </View>
-                                    )}
-                                </View>
-                            ) : (
-                                <View style={[styles.headerImage, styles.placeholderHeader]}>
-                                    <Ionicons name="image-outline" size={40} color="rgba(255,255,255,0.5)" />
-                                </View>
-                            )}
-                            <View style={styles.editIconOverlay}>
-                                <Ionicons name="camera" size={20} color="white" />
-                            </View>
-                        </Pressable>
-                    </View>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.body}>
+                <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+                    <Pressable accessibilityRole="button" accessibilityLabel="Change cover photo"
+                        onPress={() => pickImage('header')} style={styles.cover} disabled={uploadingHeader}>
+                        {headerPreview ? <Image source={{ uri: headerPreview }} style={StyleSheet.absoluteFill} />
+                            : <Ionicons name="image-outline" size={29} color={text.secondary} />}
+                        <View style={styles.coverAction}>
+                            {uploadingHeader ? <ActivityIndicator color={text.primary} size="small" />
+                                : <Ionicons name="camera-outline" size={16} color={text.primary} />}
+                            <Text style={styles.actionText}>{headerPreview ? 'Change cover' : 'Add cover'}</Text>
+                        </View>
+                    </Pressable>
+                    <Pressable accessibilityRole="button" accessibilityLabel="Change profile photo"
+                        onPress={() => pickImage('avatar')} style={styles.avatarButton} disabled={uploadingAvatar}>
+                        <View style={styles.avatar}>
+                            {avatarPreview ? <Image source={{ uri: avatarPreview }} style={StyleSheet.absoluteFill} />
+                                : <Text style={styles.initial}>{initial}</Text>}
+                        </View>
+                        <View style={styles.camera}>
+                            {uploadingAvatar ? <ActivityIndicator color={text.primary} size="small" />
+                                : <Ionicons name="camera-outline" size={15} color={text.primary} />}
+                        </View>
+                    </Pressable>
 
-                    {/* Avatar Section - Overlapping Header */}
-                    <View style={styles.avatarSection}>
-                        <Pressable onPress={() => pickImage('avatar')} style={styles.avatarContainer} disabled={uploadingAvatar}>
-                            <View>
-                                {avatarPreview ? (
-                                    <Image source={{ uri: avatarPreview }} style={styles.avatar} />
-                                ) : (
-                                    <View style={[styles.avatar, styles.placeholderAvatar]}>
-                                        <Text style={[styles.avatarPlaceholderText, monoFont]}>
-                                            {displayName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
-                                        </Text>
-                                    </View>
-                                )}
-                                {uploadingAvatar && (
-                                    <View style={[styles.avatar, styles.imageLoadingOverlay, { position: 'absolute' }]}>
-                                        <ActivityIndicator color="white" />
-                                    </View>
-                                )}
-                            </View>
-                            <View style={styles.editAvatarOverlay}>
-                                <Ionicons name="camera" size={16} color="white" />
-                            </View>
-                        </Pressable>
-                    </View>
-
-                    {/* Form Fields */}
                     <View style={styles.form}>
-                        <View style={styles.inputGroup}>
-                            <Text style={[styles.label, monoFont]}>&gt; DISPLAY NAME</Text>
-                            <TextInput
-                                style={[styles.input, monoFont]}
-                                value={displayName}
-                                onChangeText={setDisplayName}
-                                placeholder="Enter display name"
-                                placeholderTextColor={theme.colors.text.secondary}
-                            />
+                        <View>
+                            <Text style={styles.label}>Display name</Text>
+                            <TextInput accessibilityLabel="Display name" style={styles.input}
+                                value={displayName} onChangeText={setDisplayName}
+                                placeholder="Enter display name" placeholderTextColor={text.secondary} />
                         </View>
-
-                        <View style={styles.inputGroup}>
-                            <Text style={[styles.label, monoFont]}>&gt; USERNAME</Text>
-                            <TextInput
-                                style={[styles.input, monoFont]}
-                                value={username}
-                                onChangeText={setUsername}
-                                placeholder="Enter username"
-                                placeholderTextColor={theme.colors.text.secondary}
-                                autoCapitalize="none"
-                            />
+                        <View>
+                            <Text style={styles.label}>Username</Text>
+                            <TextInput accessibilityLabel="Username" style={styles.input}
+                                value={username} onChangeText={setUsername}
+                                placeholder="Enter username" placeholderTextColor={text.secondary}
+                                autoCapitalize="none" autoCorrect={false} />
                         </View>
-
-                        <View style={styles.inputGroup}>
-                            <Text style={[styles.label, monoFont]}>&gt; BIO</Text>
-                            <TextInput
-                                style={[styles.input, styles.textArea, monoFont]}
-                                value={bio}
-                                onChangeText={setBio}
-                                placeholder="Write something about yourself..."
-                                placeholderTextColor={theme.colors.text.secondary}
-                                multiline
-                                numberOfLines={4}
-                                textAlignVertical="top"
-                            />
+                        <View>
+                            <Text style={styles.label}>Bio</Text>
+                            <TextInput accessibilityLabel="Bio" style={[styles.input, styles.bio]}
+                                value={bio} onChangeText={setBio} placeholder="A few words about you"
+                                placeholderTextColor={text.secondary} multiline textAlignVertical="top" />
                         </View>
                     </View>
                 </ScrollView>
@@ -379,142 +333,22 @@ export default function Page() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: theme.colors.background.primary,
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: theme.spacing.lg,
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.1)',
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: 'white',
-    },
-    cancelButton: {
-        padding: 8,
-    },
-    cancelText: {
-        color: theme.colors.text.secondary,
-        fontSize: 16,
-    },
-    saveButton: {
-        padding: 8,
-        backgroundColor: theme.colors.primary.DEFAULT,
-        borderRadius: 20,
-        paddingHorizontal: 16,
-        minWidth: 70,
-        alignItems: 'center',
-    },
-    saveText: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 14,
-    },
-    content: {
-        paddingBottom: 40,
-    },
-    headerImageSection: {
-        height: 150,
-        width: '100%',
-        marginBottom: 50, // Space for avatar overlap
-    },
-    headerImageContainer: {
-        width: '100%',
-        height: '100%',
-        position: 'relative',
-        backgroundColor: 'rgba(255,255,255,0.05)',
-    },
-    headerImage: {
-        width: '100%',
-        height: '100%',
-        resizeMode: 'cover',
-    },
-    placeholderHeader: {
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    editIconOverlay: {
-        position: 'absolute',
-        bottom: 8,
-        right: 8,
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        padding: 8,
-        borderRadius: 20,
-    },
-    avatarSection: {
-        position: 'absolute',
-        top: 100, // Overlap header
-        left: 20,
-        zIndex: 10,
-    },
-    avatarContainer: {
-        position: 'relative',
-    },
-    avatar: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        borderWidth: 4,
-        borderColor: theme.colors.background.primary,
-    },
-    placeholderAvatar: {
-        backgroundColor: theme.colors.primary.DEFAULT,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    avatarPlaceholderText: {
-        fontSize: 40,
-        fontWeight: 'bold',
-        color: 'white',
-    },
-    editAvatarOverlay: {
-        position: 'absolute',
-        bottom: 0,
-        right: 0,
-        backgroundColor: theme.colors.primary.DEFAULT,
-        padding: 6,
-        borderRadius: 15,
-        borderWidth: 2,
-        borderColor: theme.colors.background.primary,
-    },
-    form: {
-        paddingHorizontal: theme.spacing.lg,
-        marginTop: 10,
-    },
-    inputGroup: {
-        marginBottom: 20,
-    },
-    label: {
-        color: theme.colors.text.secondary,
-        fontSize: 14,
-        marginBottom: 8,
-        fontWeight: '600',
-    },
-    input: {
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        borderRadius: 12,
-        padding: 16,
-        color: 'white',
-        fontSize: 16,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
-    },
-    textArea: {
-        minHeight: 100,
-    },
-    disabledButton: {
-        opacity: 0.5,
-    },
-    imageLoadingOverlay: {
-        backgroundColor: 'rgba(0,0,0,0.4)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
+    screen: { backgroundColor: background.primary },
+    toolbar: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: surface.border },
+    back: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: surface.elevated },
+    title: { flex: 1, minWidth: 0, fontFamily: 'Outfit_700Bold', fontSize: 22, color: text.primary },
+    save: { minWidth: 70, minHeight: 44, paddingHorizontal: 14, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: primary.ultra },
+    actionText: { fontFamily: 'Outfit_600SemiBold', fontSize: 14, color: text.primary },
+    body: { flex: 1 },
+    content: { width: '100%', maxWidth: 580, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
+    cover: { aspectRatio: 3, minHeight: 96, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: background.tertiary },
+    coverAction: { position: 'absolute', right: 8, bottom: 8, flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 34, paddingHorizontal: 9, borderRadius: 10, backgroundColor: surface.elevated },
+    avatarButton: { alignSelf: 'flex-start', width: 74, height: 74, marginTop: -24, marginLeft: 12 },
+    avatar: { flex: 1, borderRadius: 37, borderWidth: 3, borderColor: background.primary, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: primary.ultra },
+    initial: { fontFamily: 'Outfit_600SemiBold', fontSize: 29, color: text.primary },
+    camera: { position: 'absolute', right: -2, bottom: -2, width: 29, height: 29, borderRadius: 15, borderWidth: 2, borderColor: background.primary, alignItems: 'center', justifyContent: 'center', backgroundColor: primary.ultra },
+    form: { gap: 18, paddingTop: 16 },
+    label: { fontFamily: 'Outfit_600SemiBold', fontSize: 15, marginBottom: 7, color: text.primary },
+    input: { minHeight: 50, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontFamily: 'Outfit_400Regular', fontSize: 16, color: text.primary, backgroundColor: surface.elevated, borderColor: surface.borderHover },
+    bio: { minHeight: 104 },
 });
