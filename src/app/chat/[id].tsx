@@ -10,60 +10,67 @@ import { supabase } from '../../lib/supabase/client';
 import { useTheme } from '../../components/Theme/ThemeProvider';
 
 export default function ChatScreen() {
-    const { id, name } = useLocalSearchParams();
+    const { id, name, userId } = useLocalSearchParams<{ id: string; name?: string; userId?: string }>();
     const router = useRouter();
     const { theme, mode } = useTheme();
     const isDark = mode === 'dark';
     const [inputText, setInputText] = useState('');
-    const { messages, loading, error, sendMessage } = useMessages(id as string);
+    const { chatId, messages, loading, error, retry, sendMessage } = useMessages(id, userId);
+    const [sendError, setSendError] = useState('');
+    const [sending, setSending] = useState(false);
+    const busy = React.useRef(false);
     const [uploading, setUploading] = useState(false);
     const flatListRef = React.useRef<FlatList>(null);
     const insets = useSafeAreaInsets();
 
     const handleSend = async () => {
-        if (!inputText.trim()) return;
-        const textToSend = inputText;
-        setInputText('');
-        await sendMessage(textToSend);
-    };
+        const draft = inputText;
+        if (!draft.trim() || !chatId || busy.current) return;
 
-    const attachMedia = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-            allowsEditing: true,
-            quality: 1,
-        });
-
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-            await uploadMedia(result.assets[0].uri);
+        busy.current = true;
+        setSending(true);
+        setSendError('');
+        try {
+            await sendMessage(draft.trim());
+            setInputText(current => current === draft ? '' : current);
+        } catch {
+            setSendError('Message couldn’t be sent. Tap send to try again.');
+        } finally {
+            busy.current = false;
+            setSending(false);
         }
     };
 
-    const uploadMedia = async (uri: string) => {
+    const attachMedia = async () => {
+        if (!chatId || !supabase || busy.current) return;
+        busy.current = true;
+        setUploading(true);
+        setSendError('');
         try {
-            setUploading(true);
-            const response = await fetch(uri);
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ['videos'],
+                allowsEditing: true,
+                quality: 0.8,
+            });
+            const asset = result.assets?.[0];
+            if (result.canceled || !asset) return;
+
+            const response = await fetch(asset.uri);
             const blob = await response.blob();
-
-            const fileExt = uri.split('.').pop() || 'mp4';
+            const fileExt = asset.uri.split('.').pop() || 'mp4';
             const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-            const filePath = `${id}/${fileName}`; // folder for chat
-
-            const { error: uploadError } = await supabase.storage
-                .from('chat-media')
-                .upload(filePath, blob, {
-                    contentType: `video/${fileExt === 'mov' ? 'quicktime' : fileExt}`
-                });
-
+            const filePath = `${chatId}/${fileName}`;
+            const bucket = supabase.storage.from('chat-media');
+            const { error: uploadError } = await bucket.upload(filePath, blob, {
+                contentType: asset.mimeType || `video/${fileExt === 'mov' ? 'quicktime' : fileExt}`,
+            });
             if (uploadError) throw uploadError;
 
-            const { data } = supabase.storage.from('chat-media').getPublicUrl(filePath);
-
-            await sendMessage('Sent a video', data.publicUrl, 'video');
-
-        } catch (error) {
-            console.error('Upload Error: ', error);
+            await sendMessage('Sent a video', bucket.getPublicUrl(filePath).data.publicUrl, 'video');
+        } catch {
+            setSendError('Video couldn’t be sent. Please try again.');
         } finally {
+            busy.current = false;
             setUploading(false);
         }
     };
@@ -101,13 +108,13 @@ export default function ChatScreen() {
                     {/* Messages */}
                     {error ? (
                         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-                            <Ionicons name="alert-circle-outline" size={48} color="#FFFFFF" />
-                            <Text style={{ color: '#FFF', textAlign: 'center', marginTop: 12, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>{error}</Text>
+                            <Ionicons name="alert-circle-outline" size={48} color={theme.colors.text.primary} />
+                            <Text style={{ color: theme.colors.text.primary, textAlign: 'center', marginTop: 12, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>{error}</Text>
                             <TouchableOpacity
-                                onPress={() => router.replace('/inbox')}
+                                onPress={retry} accessibilityRole="button"
                                 style={{ marginTop: 20, padding: 12, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 8, borderWidth: 1, borderColor: theme.colors.primary.light }}
                             >
-                                <Text style={{ color: theme.colors.primary.light, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>[ RETURN_TO_SYSTEM ]</Text>
+                                <Text style={{ color: theme.colors.text.primary }}>Try again</Text>
                             </TouchableOpacity>
                         </View>
                     ) : (
@@ -149,8 +156,11 @@ export default function ChatScreen() {
 
                     {/* Input */}
                     <View style={[styles.floatingInputWrapper, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+                        {sendError ? (
+                            <Text accessibilityRole="alert" style={{ color: theme.colors.text.primary, marginBottom: 8 }}>{sendError}</Text>
+                        ) : null}
                         <View style={[styles.floatingInputContainer, { backgroundColor: isDark ? 'rgba(217, 228, 255, 0.05)' : 'rgba(217, 228, 255, 0.05)' }]}>
-                            <TouchableOpacity style={styles.attachButton} onPress={attachMedia} disabled={uploading}>
+                            <TouchableOpacity style={styles.attachButton} onPress={attachMedia} disabled={!chatId || uploading || sending} accessibilityLabel="Attach a video">
                                 {uploading ? (
                                     <ActivityIndicator size="small" color={theme.colors.primary.light} />
                                 ) : (
@@ -165,9 +175,11 @@ export default function ChatScreen() {
                                 onChangeText={setInputText}
                                 multiline
                             />
-                            <TouchableOpacity onPress={handleSend} style={styles.sendButtonContainer}>
+                            <TouchableOpacity onPress={handleSend} disabled={!chatId || !inputText.trim() || uploading || sending}
+                                accessibilityRole="button" accessibilityLabel="Send message" accessibilityState={{ busy: sending }}
+                                style={styles.sendButtonContainer}>
                                 <View style={[styles.sendButton, { backgroundColor: theme.colors.primary.light }]}>
-                                    <Ionicons name="arrow-up" size={20} color="#000" />
+                                    {sending ? <ActivityIndicator size="small" color="#000" /> : <Ionicons name="arrow-up" size={20} color="#000" />}
                                 </View>
                             </TouchableOpacity>
                         </View>

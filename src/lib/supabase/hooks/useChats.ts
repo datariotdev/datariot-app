@@ -1,4 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { AppState } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { supabase } from '../client';
 import { useAuth } from './useAuth';
 
@@ -13,152 +15,91 @@ export interface ChatPreview {
     isAi?: boolean;
 }
 
+type InboxChat = {
+    id: string;
+    chat_participants: {
+        user_id: string;
+        profiles: { display_name: string | null; username: string; avatar_url: string | null } | null;
+    }[];
+    messages: { content: string | null; created_at: string; media_type: string | null }[];
+};
+
 export function useChats() {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
+    const userId = user?.id;
     const [chats, setChats] = useState<ChatPreview[]>([]);
     const [loading, setLoading] = useState(true);
+    const request = useRef(0);
 
-    const fetchChats = useCallback(async () => {
-        if (!user) {
+    const fetchChats = useCallback(async (quiet = false) => {
+        const sequence = ++request.current;
+        if (authLoading) return;
+        if (!userId || !supabase) {
+            setChats([]);
             setLoading(false);
             return;
         }
 
+        if (!quiet) setLoading(true);
         try {
-            setLoading(true);
+            // The chat and message policies limit this list to the user's memberships.
+            const { data, error } = await supabase.from('chats')
+                .select('id, chat_participants(user_id, profiles(display_name, username, avatar_url)), messages(content, created_at, media_type)')
+                .order('created_at', { referencedTable: 'messages', ascending: false })
+                .limit(1, { referencedTable: 'messages' });
+            if (error) throw error;
+            if (sequence !== request.current) return;
 
-            // COMPLETE BYPASS of chat_participants to avoid RLS recursion:
-            // Let's try to infer your chats purely from messages you've sent or received
-            // Note: This relies on messages having a user_id or similar.
-
-            // First, get ALL messages sent by the user
-            console.log('--- fetchChats START ---');
-            console.log('Querying messages for user:', user.id);
-            const { data: myMsgs, error: mError } = await supabase
-                .from('messages')
-                .select('chat_id')
-                .eq('sender_id', user.id);
-
-            console.log('mError:', !!mError);
-
-            if (mError) {
-                // If even THIS triggers recursion, the backend policies are hopelessly entangled 
-                // and the user must fix the SQL policies on Supabase.
-                throw mError;
-            }
-
-            if (!myMsgs || myMsgs.length === 0) {
-                setChats([]);
-                return;
-            }
-
-            const chatIds = [...new Set(myMsgs.map((m: any) => m.chat_id))];
-
-            console.log('Found chatIds:', chatIds);
-            console.log('Querying latest messages...');
-
-            // Now get the latest message for these chatIds
-            const { data: latestMessages, error: lError } = await supabase
-                .from('messages')
-                .select('chat_id, sender_id, content, created_at, media_type')
-                .in('chat_id', chatIds)
-                .order('created_at', { ascending: false });
-
-            console.log('lError:', !!lError);
-
-            if (lError) throw lError;
-
-            const lastMsgs = new Map();
-            const interactors = new Set<string>();
-
-            if (latestMessages) {
-                for (const msg of latestMessages) {
-                    if (!lastMsgs.has(msg.chat_id)) {
-                        lastMsgs.set(msg.chat_id, msg);
-                    }
-                    if (msg.sender_id && msg.sender_id !== user.id) {
-                        interactors.add(msg.sender_id);
-                    }
-                }
-            }
-
-            let profilesMap: Record<string, any> = {};
-
-            console.log('Querying profiles for interactors:', Array.from(interactors));
-
-            if (interactors.size > 0) {
-                const { data: profilesData } = await supabase
-                    .from('profiles')
-                    .select('id, username, display_name, avatar_url')
-                    .in('id', Array.from(interactors));
-
-                if (profilesData) {
-                    profilesMap = profilesData.reduce((acc: any, curr: any) => {
-                        acc[curr.id] = curr;
-                        return acc;
-                    }, {} as Record<string, any>);
-                }
-            }
-
-            const finalChats: ChatPreview[] = [];
-            for (const cId of chatIds) {
-                // Try to guess the other user from interactors
-                // (Find the first profile in interactors that appeared in this chat's messages)
-                const chatMsgs = latestMessages?.filter((m: any) => m.chat_id === cId) || [];
-                const otherUserId = chatMsgs.find((m: any) => m.sender_id !== user.id)?.sender_id;
-
-                const profile = otherUserId ? profilesMap[otherUserId] : null;
-                const lastMsg = lastMsgs.get(cId);
-
-                finalChats.push({
-                    id: profile?.id || (cId as string),
-                    chat_id: cId as string,
-                    name: profile ? (profile.display_name || profile.username) : 'Unknown User',
-                    message: lastMsg ? (lastMsg.media_type ? `Sent a ${lastMsg.media_type}` : lastMsg.content) : 'Started a conversation',
-                    time: lastMsg ? new Date(lastMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'New',
-                    unreadCount: 0,
-                    avatar_url: profile?.avatar_url || null
+            const rows = (data ?? []) as InboxChat[];
+            const previews = rows
+                .filter(chat => chat.messages.length > 0)
+                .sort((a, b) => Date.parse(b.messages[0].created_at) - Date.parse(a.messages[0].created_at))
+                .map(chat => {
+                    const participant = chat.chat_participants.find(member => member.user_id !== userId);
+                    const profile = participant?.profiles;
+                    const latest = chat.messages[0];
+                    return {
+                        id: participant?.user_id ?? chat.id,
+                        chat_id: chat.id,
+                        name: profile?.display_name || profile?.username || 'Unknown User',
+                        message: latest.media_type ? `Sent a ${latest.media_type}` : latest.content ?? '',
+                        time: new Date(latest.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        unreadCount: 0,
+                        avatar_url: profile?.avatar_url ?? null,
+                    };
                 });
-            }
-
-            setChats(finalChats);
-
+            setChats(previews);
         } catch (error) {
-            console.error('Error fetching chats:', error);
+            if (sequence === request.current) console.warn('Could not load conversations:', error);
         } finally {
-            setLoading(false);
+            if (sequence === request.current) setLoading(false);
         }
-    }, [user]);
+    }, [authLoading, userId]);
 
     useEffect(() => {
-        fetchChats();
+        setChats([]);
+        void fetchChats();
+        if (!userId || !supabase) return;
 
-        // Optional: subscribe to new messages
-        if (!user) return;
-
-        const channel = supabase.channel('chats-updates')
-            .on(
-                'postgres_changes',
-                {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'messages',
-                },
-                (payload: any) => {
-                    // Update latest message in chat list
-                    fetchChats(); // Simplest way to refresh
-                }
-            )
-            .subscribe();
+        const channel = supabase.channel(`inbox:${userId}`)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => { void fetchChats(true); })
+            .subscribe((status: string) => { if (status === 'SUBSCRIBED') void fetchChats(true); });
 
         return () => {
-            supabase.removeChannel(channel);
+            request.current++;
+            void supabase.removeChannel(channel);
         };
-    }, [fetchChats, user]);
+    }, [fetchChats, userId]);
 
-    return {
-        chats,
-        loading,
-        refetch: fetchChats
-    };
+    useFocusEffect(useCallback(() => {
+        if (!userId || !supabase) return;
+        const refresh = () => {
+            if (AppState.currentState !== 'background' && AppState.currentState !== 'inactive') void fetchChats(true);
+        };
+        refresh();
+        const timer = setInterval(refresh, 8000);
+        return () => clearInterval(timer);
+    }, [fetchChats, userId]));
+
+    return { chats, loading, refetch: fetchChats };
 }
