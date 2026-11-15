@@ -38,6 +38,7 @@ export type FeedType = 'trending' | 'following' | 'ai' | 'user' | 'search';
 interface UseVideosProps {
     type: FeedType;
     userId?: string;
+    videoId?: string;
     searchQuery?: string;
     hashtag?: string;
     category?: string;
@@ -51,7 +52,7 @@ function getPlaybackUrl(video: { url?: string | null; s3_url?: string | null }) 
     return [video.url?.trim(), video.s3_url?.trim()].find(url => url && !retiredVideoHost.test(url));
 }
 
-export function useVideos({ type, userId, searchQuery, hashtag, category, sort = 'recent' }: UseVideosProps) {
+export function useVideos({ type, userId, videoId, searchQuery, hashtag, category, sort = 'recent' }: UseVideosProps) {
     const { user } = useAuth();
     const [videos, setVideos] = useState<Video[]>([]);
     const [loading, setLoading] = useState(true);
@@ -122,6 +123,7 @@ export function useVideos({ type, userId, searchQuery, hashtag, category, sort =
             if (userId) {
                 query = query.eq('user_id', userId);
             }
+            if (videoId) query = query.eq('id', videoId);
 
             if (hashtag) {
                 // Assuming hashtag is stored in description or a separate array
@@ -297,13 +299,13 @@ export function useVideos({ type, userId, searchQuery, hashtag, category, sort =
             setLoading(false);
             setRefreshing(false);
         }
-    }, [type, userId, searchQuery, hashtag, category, user, formatVideo, sort]);
+    }, [type, userId, videoId, searchQuery, hashtag, category, user, formatVideo, sort]);
 
     useEffect(() => {
         // console.log('useVideos component mounted or dependencies changed.');
         setPage(0);
         fetchVideos(0, true);
-    }, [type, userId, searchQuery, hashtag, category, user, fetchVideos]);
+    }, [type, userId, videoId, searchQuery, hashtag, category, user, fetchVideos]);
 
     const loadMore = () => {
         if (!loading && hasMore) {

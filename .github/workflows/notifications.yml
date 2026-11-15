@@ -1,0 +1,34 @@
+name: Notifications checks
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'scripts/test-notifications.cjs'
+      - 'supabase/**'
+      - 'package*.json'
+      - '.github/workflows/notifications.yml'
+  push:
+    paths:
+      - 'src/**'
+      - 'scripts/test-notifications.cjs'
+      - 'supabase/**'
+      - 'package*.json'
+      - '.github/workflows/notifications.yml'
+permissions:
+  contents: read
+jobs:
+  notifications:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Activity and client regression tests
+        run: node scripts/test-notifications.cjs
+      - name: Production web bundle
+        run: npx expo export --platform web --max-workers 2 --output-dir dist
+      - name: Production Android Hermes bundle
+        run: npx expo export --platform android --max-workers 2 --output-dir dist-android

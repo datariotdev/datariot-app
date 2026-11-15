@@ -21,6 +21,7 @@ import { MoreOptionsModal } from '../../components/VideoFeed/MoreOptionsModal';
 import { CommandBar, LiveTicker, HudButton, CommandTab } from '../../components/Web/CommandBar';
 import { CuratedFeed } from '../../components/VideoFeed/CuratedFeed';
 import { useCuratedReels } from '../../lib/curated/useCuratedReels';
+import { NotificationBell } from '../../components/Notifications/NotificationBell';
 
 type ViewMode = 'classic' | 'mosaic' | 'pulse';
 
@@ -208,6 +209,7 @@ const HomeScreen = () => {
                     readout={['SIGNAL NOMINAL', '2.4K ONLINE', 'LAT 12MS']}
                     actions={
                         <>
+                            <NotificationBell />
                             <HudButton
                                 label="Toggle grid layout"
                                 active={viewMode === 'mosaic'}
@@ -305,6 +307,7 @@ const HomeScreen = () => {
                     </View>
 
                     <View style={styles.rightActionsContainer}>
+                        <NotificationBell style={{ marginRight: 8 }} />
                         <Pressable
                             style={[
                                 styles.roundButton,

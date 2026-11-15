@@ -88,7 +88,7 @@ export default function SettingsScreen() {
                             <Text style={[styles.rowLabel, { color: theme.colors.text.primary }, monoFont]}>PRIVACY & SECURITY</Text>
                             <Ionicons name="chevron-forward" size={20} color={theme.colors.text.muted} />
                         </TouchableOpacity>
-                        <TouchableOpacity style={[styles.row, { borderBottomColor: theme.colors.surface.overlay, backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)' }]}>
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Notifications" onPress={() => router.push('/notifications')} style={[styles.row, { borderBottomColor: theme.colors.surface.overlay, backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)' }]}>
                             <Text style={[styles.rowLabel, { color: theme.colors.text.primary }, monoFont]}>NOTIFICATIONS</Text>
                             <Ionicons name="chevron-forward" size={20} color={theme.colors.text.muted} />
                         </TouchableOpacity>
