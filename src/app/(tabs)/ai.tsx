@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeInUp, useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, withDelay, Easing } from 'react-native-reanimated';
+import { OrvelisMark } from '../../components/AI/OrvelisMark';
 import { OrvelisWelcome } from '../../components/AI/OrvelisWelcome';
 import { useTheme } from '../../components/Theme/ThemeProvider';
 import { generateVideoAnalysis, chatWithAI, generateDailyInsight, VideoAnalysis, DailyInsight } from '../../lib/ai/client';
@@ -56,7 +57,7 @@ const TypingIndicator = () => {
     return (
         <View style={styles.typingContainer}>
             <View style={styles.typingBubble}>
-                <MaterialCommunityIcons name="robot-excited-outline" size={14} color="rgba(255,255,255,0.4)" style={{ marginRight: 8 }} />
+                <View style={{ marginRight: 8 }}><OrvelisMark size={14} color="rgba(255,255,255,0.4)" /></View>
                 <Animated.View style={[styles.typingDot, style1]} />
                 <Animated.View style={[styles.typingDot, style2]} />
                 <Animated.View style={[styles.typingDot, style3]} />
@@ -107,7 +108,7 @@ export default function AIScreen() {
 
     // Refs
     const flatListRef = useRef<FlatList>(null);
-    const inputRef = useRef<TextInput>(null);
+    const inputRef = useRef<React.ElementRef<typeof TextInput>>(null);
 
     const scrollToBottom = useCallback(() => {
         setTimeout(() => {
@@ -314,11 +315,11 @@ export default function AIScreen() {
                             backgroundColor: isDark ? 'rgba(56, 189, 248, 0.1)' : 'rgba(14, 165, 233, 0.08)',
                             borderColor: isDark ? 'rgba(56, 189, 248, 0.25)' : 'rgba(14, 165, 233, 0.2)'
                         }]}>
-                            <MaterialCommunityIcons name="robot-excited" size={22} color={theme.colors.primary.DEFAULT} />
+                            <OrvelisMark size={26} color={theme.colors.primary.DEFAULT} />
                         </View>
                         <View>
                             <Text style={[styles.headerTitle, { color: theme.colors.text.primary }]}>Orvelis</Text>
-                            <Text style={[styles.headerSubtitle, { color: theme.colors.text.muted }]}>AI Core • Online</Text>
+                            <Text style={[styles.headerSubtitle, { color: theme.colors.text.muted }]}>Intelligence by Datariot</Text>
                         </View>
                     </View>
                     <View style={styles.headerStatusWrapper}>

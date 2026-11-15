@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { OrvelisMark } from '../../components/AI/OrvelisMark';
 import { Tabs } from 'expo-router';
 import { setAudioModeAsync } from 'expo-audio';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -128,12 +129,8 @@ const TabLayout = () => {
                     name="ai"
                     options={{
                         title: 'Orvelis AI',
-                        tabBarIcon: ({ focused, color }) => (
-                            <MaterialCommunityIcons
-                                name={focused ? "robot-excited" : "robot-excited-outline"}
-                                size={24}
-                                color={color}
-                            />
+                        tabBarIcon: ({ color }) => (
+                            <OrvelisMark size={24} color={color} />
                         ),
                     }}
                 />

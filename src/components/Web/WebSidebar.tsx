@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'expo-router';
 import { useAuth } from '../../lib/supabase/hooks/useAuth';
 import { supabase } from '../../lib/supabase/client';
 import { LinearGradient } from 'expo-linear-gradient';
+import { OrvelisMark } from '../AI/OrvelisMark';
 import { useTheme } from '../Theme/ThemeProvider';
 
 export const RAIL_WIDTH = 78;
@@ -48,7 +49,7 @@ const NAV: NavEntry[] = [
         code: '04',
         label: 'Orvelis AI',
         path: '/ai',
-        icon: (c, s) => <MaterialCommunityIcons name="robot-outline" size={s} color={c} />,
+        icon: (c, s) => <OrvelisMark size={s} color={c} />,
     },
     {
         key: 'inbox',
