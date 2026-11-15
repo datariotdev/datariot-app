@@ -71,11 +71,22 @@ export function useMessages(chatId: string, recipientId?: string) {
 
                 channel = supabase.channel(`messages:${resolvedId}`)
                     .on('postgres_changes', {
-                        event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${resolvedId}`,
-                    }, ({ new: row }: { new: MessageRow }) => {
+                        event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${resolvedId}`,
+                    }, (payload) => {
                         if (!active) return;
-                        const message = formatMessage(row, senderId);
-                        if (initialLoadDone) appendMessage(message);
+                        if (payload.eventType === 'DELETE') {
+                            const deletedId = (payload.old as { id?: string }).id;
+                            if (deletedId) setConversation(previous => previous?.scope === scope
+                                ? { ...previous, messages: previous.messages.filter(item => item.id !== deletedId) }
+                                : previous);
+                            return;
+                        }
+                        const message = formatMessage(payload.new as MessageRow, senderId);
+                        if (payload.eventType === 'UPDATE') {
+                            setConversation(previous => previous?.scope === scope
+                                ? { ...previous, messages: previous.messages.map(item => item.id === message.id ? message : item) }
+                                : previous);
+                        } else if (initialLoadDone) appendMessage(message);
                         else pending.push(message);
                     })
                     .subscribe();
@@ -118,10 +129,11 @@ export function useMessages(chatId: string, recipientId?: string) {
                 const recent = ((data ?? []) as MessageRow[]).map(row => formatMessage(row, userId));
                 setConversation(previous => {
                     if (previous?.scope !== scope) return previous;
+                    const latest = new Map(recent.map(message => [message.id, message]));
                     const known = new Set(previous.messages.map(message => message.id));
                     const incoming = recent.filter(message => !known.has(message.id));
-                    if (!incoming.length) return previous;
-                    const messages = [...previous.messages, ...incoming].sort((a, b) => a.created_at.localeCompare(b.created_at));
+                    const updated = previous.messages.map(message => latest.get(message.id) ?? message);
+                    const messages = [...updated, ...incoming].sort((a, b) => a.created_at.localeCompare(b.created_at));
                     return { ...previous, messages };
                 });
             } catch {
@@ -146,7 +158,35 @@ export function useMessages(chatId: string, recipientId?: string) {
         appendMessage(formatMessage(data as MessageRow, userId));
     };
 
+    const editMessage = async (messageId: string, content: string) => {
+        const trimmed = content.trim();
+        if (!trimmed) throw new Error('Message cannot be empty');
+        if (!current?.id || !userId || !supabase) throw new Error('Chat unavailable');
+        const { data, error } = await supabase.from('messages')
+            .update({ content: trimmed }).eq('id', messageId).eq('chat_id', current.id)
+            .eq('sender_id', userId).select().single();
+        if (error) throw error;
+        const updated = formatMessage(data as MessageRow, userId);
+        setConversation(previous => previous?.scope === scope
+            ? { ...previous, messages: previous.messages.map(message => message.id === messageId ? updated : message) }
+            : previous);
+    };
+
+    const deleteMessage = async (messageId: string) => {
+        if (!current?.id || !userId || !supabase) throw new Error('Chat unavailable');
+        const { data, error } = await supabase.from('messages')
+            .delete().eq('id', messageId).eq('chat_id', current.id)
+            .eq('sender_id', userId).select('id').single();
+        if (error) throw error;
+        if (!data) throw new Error('Message could not be deleted');
+        setConversation(previous => previous?.scope === scope
+            ? { ...previous, messages: previous.messages.filter(message => message.id !== messageId) }
+            : previous);
+    };
+
     return {
+        editMessage,
+        deleteMessage,
         chatId: current?.id ?? null,
         messages: current?.messages ?? [],
         loading: !current,
