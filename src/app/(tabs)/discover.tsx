@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, Pressable, FlatList, useWindowDimensions, ActivityIndicator, Platform, RefreshControl } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Pressable, FlatList, Platform, RefreshControl } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { SafeAreaView } from '@components/UI/SafeAreaView';
 import { theme as baseTheme } from '@design-system/theme';
@@ -13,7 +13,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 // Intelligence Hub Components
 import { SectionHeader } from '@components/Discovery/SectionHeader';
-import { DNAMatchCard } from '@components/Discovery/DNAMatchCard';
+import { UserSearchResults } from '@components/Discovery/UserSearchResults';
+import { useUserSearch } from '@lib/supabase/hooks/useUserSearch';
+import { useAuth } from '@lib/supabase/hooks/useAuth';
 import { DebateCard } from '@components/Debate/DebateCard';
 import { TrendingTopics } from '@components/Discovery/TrendingTopics';
 import { TrendingBullets } from '@components/Discovery/TrendingBullets';
@@ -27,6 +29,9 @@ export default function DiscoverScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [activeBranch, setActiveBranch] = useState('active');
     const router = useRouter();
+    const { user } = useAuth();
+    const userSearch = useUserSearch(searchQuery, user?.id);
+    const isTagSearch = searchQuery.trim().startsWith('@');
 
     // 1. Fetch Debates (Posts)
     const {
@@ -90,8 +95,12 @@ export default function DiscoverScreen() {
                 </View>
             )}
 
+            {!!searchQuery.trim() && (
+                <UserSearchResults {...userSearch} onRetry={userSearch.retry} />
+            )}
+
             {/* 4. Debate Switcher & Feed Header */}
-            <View style={{ marginTop: 8 }}>
+            {!isTagSearch && <View style={{ marginTop: 8 }}>
                 <SectionHeader
                     title={searchQuery ? 'Strategic Search' : 'Active Debates'}
                     subtitle={searchQuery ? `Logic for "${searchQuery}"` : 'Filter by knowledge branch'}
@@ -102,7 +111,7 @@ export default function DiscoverScreen() {
                         onTabChange={setActiveBranch}
                     />
                 )}
-            </View>
+            </View>}
         </View>
     );
 
@@ -121,7 +130,7 @@ export default function DiscoverScreen() {
         />
     );
 
-    const filteredPosts = searchQuery
+    const filteredPosts = isTagSearch ? [] : searchQuery
         ? textPosts.filter(p => p.content.toLowerCase().includes(searchQuery.toLowerCase()))
         : textPosts;
 
@@ -140,13 +149,16 @@ export default function DiscoverScreen() {
                             <Ionicons name="search-outline" size={18} color={theme.colors.text.muted} />
                             <TextInput
                                 style={[styles.searchInput, { color: theme.colors.text.primary }]}
-                                placeholder="Search the Arena..."
+                                placeholder="Search the Arena or @username..."
                                 placeholderTextColor={theme.colors.text.muted}
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
+                                accessibilityLabel="Search debates or users by username"
+                                autoCapitalize="none"
+                                autoCorrect={false}
                             />
                             {searchQuery.length > 0 && (
-                                <Pressable onPress={() => setSearchQuery('')}>
+                                <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setSearchQuery('')}>
                                     <Ionicons name="close-circle" size={18} color={theme.colors.text.muted} />
                                 </Pressable>
                             )}
@@ -159,12 +171,13 @@ export default function DiscoverScreen() {
                     renderItem={renderDebateItem}
                     keyExtractor={(item) => item.id}
                     showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
                     contentContainerStyle={{ paddingBottom: 100 }}
-                    ListHeaderComponent={renderHeader}
+                    ListHeaderComponent={renderHeader()}
                     ListEmptyComponent={
-                        <View style={styles.emptyContainer}>
+                        !isTagSearch ? <View style={styles.emptyContainer}>
                             <Text style={[styles.emptyText, { color: theme.colors.text.muted }]}>No debates found matching your search.</Text>
-                        </View>
+                        </View> : null
                     }
                     refreshControl={
                         <RefreshControl

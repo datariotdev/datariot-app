@@ -20,5 +20,7 @@ jobs:
       - name: Repair and validate dependency lockfile
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
+      - name: User search regression tests
+        run: node scripts/test-user-search.cjs
       - name: TypeScript check
         run: npx tsc --noEmit
