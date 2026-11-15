@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, TextInput, KeyboardAvoidingView, Platform, FlatList, Modal, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeIn, FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, withDelay, Easing } from 'react-native-reanimated';
-import { BlurView } from 'expo-blur';
+import Animated, { FadeIn, FadeInUp, useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, withDelay, Easing } from 'react-native-reanimated';
+import { OrvelisWelcome } from '../../components/AI/OrvelisWelcome';
 import { useTheme } from '../../components/Theme/ThemeProvider';
 import { generateVideoAnalysis, chatWithAI, generateDailyInsight, VideoAnalysis, DailyInsight } from '../../lib/ai/client';
-
-const { width } = Dimensions.get('window');
 
 type ToolType = 'chat' | 'insight' | 'analyze';
 
@@ -23,14 +21,6 @@ interface Message {
 // Generate unique IDs
 let _msgIdCounter = 0;
 const uniqueId = () => `msg_${Date.now()}_${++_msgIdCounter}`;
-
-// Example prompts for first-time users
-const EXAMPLE_PROMPTS = [
-    { iconType: 'material', iconName: 'lightning-bolt', color: '#A5C6FF', text: 'Daily insight', tool: 'insight' as ToolType, desc: 'Focus reading' },
-    { iconType: 'material', iconName: 'microscope', color: '#10B981', text: 'Analyze content', tool: 'analyze' as ToolType, desc: 'Truth scan' },
-    { iconType: 'material', iconName: 'brain', color: '#8B5CF6', text: 'What can you do?', tool: 'chat' as ToolType, desc: 'Capabilities' },
-    { iconType: 'feather', iconName: 'lightbulb', color: '#EC4899', text: 'Tell me something interesting', tool: 'chat' as ToolType, desc: 'Random insight' },
-];
 
 // Animated typing dots component
 const TypingIndicator = () => {
@@ -57,7 +47,7 @@ const TypingIndicator = () => {
                 withTiming(0.3, { duration: 400 })
             ), -1, false
         );
-    }, []);
+    }, [dot1, dot2, dot3]);
 
     const style1 = useAnimatedStyle(() => ({ opacity: dot1.value, transform: [{ scale: 0.8 + dot1.value * 0.4 }] }));
     const style2 = useAnimatedStyle(() => ({ opacity: dot2.value, transform: [{ scale: 0.8 + dot2.value * 0.4 }] }));
@@ -86,7 +76,7 @@ const PulseGlow = () => {
                 withTiming(0.4, { duration: 2000, easing: Easing.inOut(Easing.ease) })
             ), -1, false
         );
-    }, []);
+    }, [pulse]);
 
     const glowStyle = useAnimatedStyle(() => ({
         opacity: pulse.value * 0.6,
@@ -105,151 +95,19 @@ const PulseGlow = () => {
     );
 };
 
-const SuggestionChip = ({ prompt, isDark, theme, onPress }: { prompt: any, isDark: boolean, theme: any, onPress: () => void }) => {
-    const [isHovered, setIsHovered] = useState(false);
-
-    return (
-        <Pressable
-            style={({ pressed }: any) => [
-                styles.suggestionChip,
-                {
-                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(255, 255, 255, 0.65)',
-                    borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
-                },
-                isHovered && {
-                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.95)',
-                    borderColor: prompt.color,
-                    transform: [{ scale: 1.02 }],
-                    shadowColor: prompt.color,
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: isDark ? 0.2 : 0.08,
-                    shadowRadius: 12,
-                },
-                pressed && {
-                    opacity: 0.7,
-                }
-            ]}
-            onPress={onPress}
-            onHoverIn={() => setIsHovered(true)}
-            onHoverOut={() => setIsHovered(false)}
-        >
-            <View style={[
-                styles.suggestionIconContainer,
-                {
-                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)',
-                    borderColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)',
-                },
-                isHovered && {
-                    backgroundColor: `${prompt.color}15`,
-                    borderColor: `${prompt.color}35`,
-                }
-            ]}>
-                {prompt.iconType === 'feather' ? (
-                    <Feather name={prompt.iconName as any} size={15} color={prompt.color} />
-                ) : prompt.iconType === 'ionicon' ? (
-                    <Ionicons name={prompt.iconName as any} size={15} color={prompt.color} />
-                ) : (
-                    <MaterialCommunityIcons name={prompt.iconName as any} size={17} color={prompt.color} />
-                )}
-            </View>
-            <View style={styles.suggestionTextWrap}>
-                <Text style={[styles.suggestionText, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamilies.bold }]}>{prompt.text}</Text>
-                <Text style={[styles.suggestionDesc, { color: theme.colors.text.muted, fontFamily: theme.typography.fontFamilies.regular }]}>{prompt.desc}</Text>
-            </View>
-        </Pressable>
-    );
-};
-
-const AIIntroCard = ({ theme, isDark }: { theme: any, isDark: boolean }) => {
-    return (
-        <Animated.View 
-            entering={FadeInDown.duration(400).springify()}
-            style={[
-                styles.introCard,
-                {
-                    backgroundColor: isDark ? 'rgba(14, 16, 23, 0.4)' : 'rgba(255, 255, 255, 0.45)',
-                    borderColor: isDark ? 'rgba(217, 228, 255, 0.08)' : 'rgba(107, 127, 204, 0.12)',
-                }
-            ]}
-        >
-            {/* Ambient subtle flare background */}
-            <LinearGradient
-                colors={isDark ? ['rgba(217, 228, 255, 0.01)', 'transparent'] : ['rgba(107, 127, 204, 0.01)', 'transparent']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFillObject}
-            />
-
-            <View style={styles.introHeader}>
-                <View style={[
-                    styles.introIconContainer,
-                    {
-                        backgroundColor: isDark ? 'rgba(217, 228, 255, 0.01)' : 'rgba(107, 127, 204, 0.02)',
-                        borderColor: isDark ? 'rgba(217, 228, 255, 0.05)' : 'rgba(107, 127, 204, 0.08)',
-                    }
-                ]}>
-                    <MaterialCommunityIcons name="brain" size={22} color={theme.colors.primary.DEFAULT} />
-                </View>
-                <View style={styles.introHeaderText}>
-                    <Text style={[styles.introTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamilies.bold }]}>
-                        ORVELIS COGNITIVE CORE
-                    </Text>
-                    <Text style={[styles.introSubtitle, { color: theme.colors.text.muted, fontFamily: theme.typography.fontFamilies.tech }]}>
-                        SECURE SYNAPSE NODE // V1.0.0
-                    </Text>
-                </View>
-            </View>
-
-            <Text style={[styles.introDesc, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamilies.regular }]}>
-                Engineered at the intersection of media forensics and high-fidelity intelligence synthesis. Orvelis is designed to stress-test concepts through strategic dialogue, analyze narrative parameters, and generate deep cognitive focus insight readings in real-time.
-            </Text>
-
-            <View style={[styles.introDivider, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)' }]} />
-
-            <View style={styles.introMetaRow}>
-                <View style={styles.introMetaCol}>
-                    <Text style={[styles.introMetaLabel, { color: theme.colors.text.muted, fontFamily: theme.typography.fontFamilies.tech }]}>
-                        STRATEGIC DEPTH
-                    </Text>
-                    <Text style={[styles.introMetaVal, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamilies.semibold }]}>
-                        SYNTHETIC COGNITION
-                    </Text>
-                </View>
-                <View style={styles.introMetaCol}>
-                    <Text style={[styles.introMetaLabel, { color: theme.colors.text.muted, fontFamily: theme.typography.fontFamilies.tech }]}>
-                        SYNC STATUS
-                    </Text>
-                    <Text style={[styles.introMetaVal, { color: theme.colors.text.primary, fontFamily: theme.typography.fontFamilies.semibold }]}>
-                        ⚡ REAL-TIME LATENCY
-                    </Text>
-                </View>
-            </View>
-        </Animated.View>
-    );
-};
-
 export default function AIScreen() {
     // Chat State
-    const [messages, setMessages] = useState<Message[]>([
-        {
-            id: 'init',
-            role: 'assistant',
-            content: "Welcome to the synapse. Select an analysis module below or introduce a query to initiate dialogue.",
-            type: 'text'
-        }
-    ]);
+    const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(false);
     const [selectedTool, setSelectedTool] = useState<ToolType>('chat');
-
-    // Onboarding State
-    const [showSuggestions, setShowSuggestions] = useState(true);
 
     const { theme, mode } = useTheme();
     const isDark = mode === 'dark';
 
     // Refs
     const flatListRef = useRef<FlatList>(null);
+    const inputRef = useRef<TextInput>(null);
 
     const scrollToBottom = useCallback(() => {
         setTimeout(() => {
@@ -257,39 +115,14 @@ export default function AIScreen() {
         }, 150);
     }, []);
 
-    const handleExamplePrompt = (prompt: typeof EXAMPLE_PROMPTS[0]) => {
-        setShowSuggestions(false);
-        setSelectedTool(prompt.tool);
-
-        if (prompt.tool === 'chat') {
-            // Immediately send as a message
-            const userMsg: Message = { id: uniqueId(), role: 'user', content: prompt.text, type: 'text' };
-            setMessages(prev => [...prev, userMsg]);
-            setLoading(true);
-            scrollToBottom();
-
-            const history = messages.map(m => ({ role: m.role, content: m.content }));
-            chatWithAI(prompt.text, history).then(response => {
-                setMessages(prev => [...prev, {
-                    id: uniqueId(),
-                    role: 'assistant',
-                    content: response,
-                    type: 'text'
-                }]);
-            }).catch(console.error).finally(() => {
-                setLoading(false);
-                scrollToBottom();
-            });
-        } else {
-            handleToolSelect(prompt.tool);
-        }
+    const choosePrompt = (prompt: string) => {
+        setSelectedTool('chat');
+        setInputText(prompt);
+        inputRef.current?.focus();
     };
 
     const handleSendMessage = async () => {
-        if (!inputText.trim()) return;
-
-        // Hide suggestions after first message
-        setShowSuggestions(false);
+        if (loading || !inputText.trim()) return;
 
         const userMsg: Message = { id: uniqueId(), role: 'user', content: inputText, type: 'text' };
         setMessages(prev => [...prev, userMsg]);
@@ -324,7 +157,6 @@ export default function AIScreen() {
 
     const handleToolSelect = async (tool: ToolType) => {
         setSelectedTool(tool);
-        setShowSuggestions(false);
 
         if (tool === 'insight') {
             setLoading(true);
@@ -509,8 +341,8 @@ export default function AIScreen() {
                     ref={flatListRef}
                     data={messages}
                     keyExtractor={item => item.id}
-                    contentContainerStyle={styles.chatList}
-                    ListHeaderComponent={<AIIntroCard theme={theme} isDark={isDark} />}
+                    contentContainerStyle={[styles.chatList, messages.length === 0 && { flexGrow: 1, justifyContent: 'center' }]}
+                    ListEmptyComponent={<OrvelisWelcome dark={isDark} onChoosePrompt={choosePrompt} />}
                     renderItem={renderMessage}
                     showsVerticalScrollIndicator={false}
                 />
@@ -520,24 +352,6 @@ export default function AIScreen() {
                     keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
                     style={[styles.keyboardArea, { backgroundColor: theme.colors.background.primary }]}
                 >
-                    {/* Example Prompt Suggestions */}
-                    {showSuggestions && messages.length <= 1 && (
-                        <Animated.View entering={FadeInDown.delay(300).springify()} style={styles.suggestionsContainer}>
-                            <Text style={[styles.suggestionsTitle, { color: isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)' }]}>Quick Start</Text>
-                            <View style={styles.suggestionsGrid}>
-                                {EXAMPLE_PROMPTS.map((prompt, index) => (
-                                    <SuggestionChip
-                                        key={index}
-                                        prompt={prompt}
-                                        isDark={isDark}
-                                        theme={theme}
-                                        onPress={() => handleExamplePrompt(prompt)}
-                                    />
-                                ))}
-                            </View>
-                        </Animated.View>
-                    )}
-
                     {loading && <TypingIndicator />}
 
                     {/* Tool Selector */}
@@ -579,6 +393,8 @@ export default function AIScreen() {
                             borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
                         }]}>
                             <TextInput
+                                ref={inputRef}
+                                accessibilityLabel="Message Orvelis"
                                 style={[styles.input, { color: theme.colors.text.primary }]}
                                 placeholder={getPlaceholder()}
                                 placeholderTextColor={theme.colors.text.muted}
@@ -590,6 +406,8 @@ export default function AIScreen() {
                             />
                         </View>
                         <TouchableOpacity
+                            accessibilityRole="button"
+                            accessibilityLabel="Send message"
                             onPress={handleSendMessage}
                             style={[
                                 styles.sendButton,
@@ -599,7 +417,7 @@ export default function AIScreen() {
                                         : (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
                                 }
                             ]}
-                            disabled={!inputText.trim()}
+                            disabled={loading || !inputText.trim()}
                             activeOpacity={0.7}
                         >
                             <Ionicons
@@ -680,67 +498,6 @@ const styles = StyleSheet.create({
         height: 8,
         borderRadius: 4,
         zIndex: 2,
-    },
-    // ===== INTRO CARD =====
-    introCard: {
-        borderRadius: 24,
-        borderWidth: 1,
-        padding: 24,
-        marginBottom: 28,
-        position: 'relative',
-        overflow: 'hidden',
-    },
-    introHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 16,
-        marginBottom: 16,
-    },
-    introIconContainer: {
-        width: 44,
-        height: 44,
-        borderRadius: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-    },
-    introHeaderText: {
-        flex: 1,
-    },
-    introTitle: {
-        fontSize: 12,
-        letterSpacing: 2,
-    },
-    introSubtitle: {
-        fontSize: 8,
-        letterSpacing: 1.5,
-        marginTop: 3,
-    },
-    introDesc: {
-        fontSize: 13,
-        lineHeight: 20,
-        letterSpacing: 0.2,
-    },
-    introDivider: {
-        height: 1,
-        marginVertical: 18,
-    },
-    introMetaRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        gap: 16,
-    },
-    introMetaCol: {
-        flex: 1,
-    },
-    introMetaLabel: {
-        fontSize: 8,
-        letterSpacing: 1.5,
-        marginBottom: 4,
-    },
-    introMetaVal: {
-        fontSize: 10,
-        letterSpacing: 0.5,
     },
     // ===== CHAT LIST =====
     chatList: {
@@ -944,56 +701,5 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         letterSpacing: 1.5,
         textTransform: 'uppercase',
-    },
-    // ===== SUGGESTION CHIPS =====
-    suggestionsContainer: {
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-    },
-    suggestionsTitle: {
-        fontSize: 11,
-        fontWeight: '700',
-        marginBottom: 10,
-        letterSpacing: 1.5,
-        textTransform: 'uppercase',
-    },
-    suggestionsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 12,
-    },
-    suggestionChip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderRadius: 18,
-        borderWidth: 1,
-        gap: 12,
-        width: '48%',
-        // @ts-ignore
-        transition: 'all 0.2s cubic-bezier(0.22, 1, 0.36, 1)',
-    },
-    suggestionIconContainer: {
-        width: 32,
-        height: 32,
-        borderRadius: 10,
-        borderWidth: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        // @ts-ignore
-        transition: 'all 0.2s ease',
-    },
-    suggestionTextWrap: {
-        flex: 1,
-    },
-    suggestionText: {
-        fontSize: 13,
-        fontWeight: '700',
-    },
-    suggestionDesc: {
-        fontSize: 10,
-        fontWeight: '500',
-        marginTop: 1,
     },
 });
