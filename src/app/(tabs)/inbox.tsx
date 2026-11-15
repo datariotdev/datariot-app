@@ -1,21 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, Switch, TextInput, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, ActivityIndicator, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, Feather } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { ChatItem } from '../../components/UI/ChatItem';
 import { useRouter } from 'expo-router';
 import { useChats } from '../../lib/supabase/hooks/useChats';
-import { supabase } from '../../lib/supabase/client';
+import { useUserSearch } from '../../lib/supabase/hooks/useUserSearch';
+import { normalizeUsernameQuery, SearchProfile } from '../../lib/supabase/searchUsers';
 import { useAuth } from '../../lib/supabase/hooks/useAuth';
 import { useTheme } from '../../components/Theme/ThemeProvider';
-
-interface Profile {
-    id: string;
-    username: string;
-    display_name: string;
-    avatar_url: string | null;
-}
 
 // Mock Data
 const AI_BOT = {
@@ -37,38 +30,11 @@ export default function InboxScreen() {
     // Search state
     const [isSearching, setIsSearching] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [foundUsers, setFoundUsers] = useState<Profile[]>([]);
-    const [searchLoading, setSearchLoading] = useState(false);
+    const { users: foundUsers, loading: searchLoading, error: searchError, retry } = useUserSearch(
+        isSearching && user ? searchQuery : '', user?.id,
+    );
 
-    useEffect(() => {
-        if (searchQuery.length >= 2) {
-            searchUsers(searchQuery);
-        } else {
-            setFoundUsers([]);
-        }
-    }, [searchQuery]);
-
-    const searchUsers = async (query: string) => {
-        if (!user) return;
-        setSearchLoading(true);
-        try {
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('id, username, display_name, avatar_url')
-                .ilike('username', `%${query}%`)
-                .neq('id', user.id)
-                .limit(20);
-
-            if (error) throw error;
-            setFoundUsers(data || []);
-        } catch (error) {
-            console.error('Error searching users:', error);
-        } finally {
-            setSearchLoading(false);
-        }
-    };
-
-    const startChat = (targetUser: Profile) => {
+    const startChat = (targetUser: SearchProfile) => {
         if (!user) return;
         setIsSearching(false);
         setSearchQuery('');
@@ -129,11 +95,13 @@ export default function InboxScreen() {
                     <Ionicons name="search" size={20} color={theme.colors.text.muted} style={styles.searchIcon} />
                     <TextInput
                         style={[styles.searchInput, { color: theme.colors.text.primary }]}
-                        placeholder="Search users to chat..."
+                        placeholder="Search @username to chat..."
                         placeholderTextColor={theme.colors.text.muted}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                         autoCapitalize="none"
+                        autoCorrect={false}
+                        accessibilityLabel="Search users to chat by username"
                         autoFocus
                     />
                 </View>
@@ -163,25 +131,31 @@ export default function InboxScreen() {
                 ) : (
                     <FlatList
                         data={foundUsers}
+                        keyboardShouldPersistTaps="handled"
                         keyExtractor={(item) => item.id}
                         contentContainerStyle={styles.listContainer}
                         ListEmptyComponent={
-                            searchQuery.length >= 2 ? (
+                            searchError ? (
+                                <TouchableOpacity accessibilityRole="button" onPress={retry}>
+                                    <Text accessibilityRole="alert" style={[styles.emptyText, { color: theme.colors.text.muted }]}>{searchError} Tap to retry.</Text>
+                                </TouchableOpacity>
+                            ) : normalizeUsernameQuery(searchQuery) ? (
                                 <Text style={[styles.emptyText, { color: theme.colors.text.muted }]}>No users found</Text>
                             ) : (
-                                <Text style={[styles.emptyText, { color: theme.colors.text.muted }]}>Type at least 2 characters to search</Text>
+                                <Text style={[styles.emptyText, { color: theme.colors.text.muted }]}>Type a username to search</Text>
                             )
                         }
                         renderItem={({ item }) => (
                             <TouchableOpacity style={[styles.userItem, { borderBottomColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]} onPress={() => startChat(item)}>
                                 <View style={[styles.avatar, { backgroundColor: theme.colors.primary.DEFAULT }]}>
                                     <Text style={styles.avatarText}>
-                                        {(item.display_name || item.username)[0].toUpperCase()}
+                                        {(item.display_name || item.nickname || item.username).charAt(0).toUpperCase()}
                                     </Text>
+                                    {item.avatar_url && <Image source={{ uri: item.avatar_url }} style={styles.avatarImage} />}
                                 </View>
                                 <View style={styles.userInfo}>
-                                    <Text style={[styles.displayName, { color: theme.colors.text.primary }]}>{item.display_name || item.username}</Text>
-                                    <Text style={[styles.username, { color: theme.colors.text.secondary }]}>@{item.username}</Text>
+                                    <Text numberOfLines={1} style={[styles.displayName, { color: theme.colors.text.primary }]}>{item.display_name || item.nickname || item.username}</Text>
+                                    <Text numberOfLines={1} style={[styles.username, { color: theme.colors.text.secondary }]}>@{item.username}</Text>
                                 </View>
                             </TouchableOpacity>
                         )}
@@ -350,6 +324,10 @@ const styles = StyleSheet.create({
         color: '#FFF',
         fontSize: 18,
         fontWeight: 'bold',
+    },
+    avatarImage: {
+        ...StyleSheet.absoluteFillObject,
+        borderRadius: 24,
     },
     userInfo: {
         flex: 1,
