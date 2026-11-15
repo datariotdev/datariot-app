@@ -3,8 +3,8 @@ import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
 import { ThemeProvider, useTheme } from '../components/Theme/ThemeProvider';
+import { NotificationsProvider } from '../components/Notifications/NotificationsProvider';
 import * as SplashScreen from 'expo-splash-screen';
 import {
     useFonts,
@@ -107,12 +107,16 @@ function AppContent() {
         <>
             <GestureHandlerRootView style={{ flex: 1, backgroundColor: systemAreaBackground }}>
                 <SafeAreaProvider>
+                    <NotificationsProvider>
                     <Stack screenOptions={{ contentStyle: { backgroundColor: '#08090D' } }}>
                         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                         <Stack.Screen name="user/[id]" options={{ headerShown: false }} />
                         <Stack.Screen name="auth" options={{ headerShown: false }} />
                         <Stack.Screen name="editor" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+                        <Stack.Screen name="notifications" options={{ headerShown: false }} />
+                        <Stack.Screen name="video-player" options={{ headerShown: false }} />
                     </Stack>
+                    </NotificationsProvider>
                 </SafeAreaProvider>
             </GestureHandlerRootView>
             {Platform.OS === 'web' && (

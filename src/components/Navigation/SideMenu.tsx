@@ -29,6 +29,7 @@ const MENU_ITEMS = [
     { title: 'LEADERBOARD', route: '/leaderboard' },
     { title: 'FORUM', route: '/forum' },
     { title: 'SETTINGS', route: '/settings' },
+    { title: 'NOTIFICATIONS', route: '/notifications' },
 ];
 
 const SOCIAL_LINKS = [

@@ -36,6 +36,7 @@ export const ResponsiveLayout = ({ children }: ResponsiveLayoutProps) => {
         '/inbox',
         '/profile',
         '/settings',
+        '/notifications',
         '/create',
     ].includes(pathname);
 

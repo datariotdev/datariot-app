@@ -6,6 +6,7 @@ import { useAuth } from '../../lib/supabase/hooks/useAuth';
 import { supabase } from '../../lib/supabase/client';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../Theme/ThemeProvider';
+import { NotificationBellIcon } from '../Notifications/NotificationBell';
 
 export const RAIL_WIDTH = 78;
 export const RAIL_WIDTH_EXPANDED = 250;
@@ -65,6 +66,13 @@ const NAV: NavEntry[] = [
         icon: (c, s) => <Feather name="user" size={s} color={c} />,
     },
     {
+        key: 'notifications',
+        code: '08',
+        label: 'Notifications',
+        path: '/notifications',
+        icon: (c, s) => <NotificationBellIcon color={c} size={s} />,
+    },
+    {
         key: 'settings',
         code: '07',
         label: 'Settings',
@@ -98,6 +106,8 @@ const RailItem = ({
     return (
         <Pressable
             onPress={onPress}
+            accessibilityRole="button"
+            accessibilityLabel={entry.label}
             onHoverIn={() => setIsHovered(true)}
             onHoverOut={() => setIsHovered(false)}
             style={[

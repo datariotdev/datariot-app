@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { CoubClassicFeed } from '@components/VideoFeed/CoubClassicFeed';
@@ -7,6 +7,7 @@ import { theme } from '@design-system/theme';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
+import { CommentsModal } from '../components/VideoFeed/CommentsModal';
 
 export default function VideoPlayerScreen() {
     const isFocused = useIsFocused();
@@ -16,6 +17,8 @@ export default function VideoPlayerScreen() {
         hashtag?: string;
         searchQuery?: string;
         initialVideoId?: string;
+        videoId?: string;
+        openComments?: string;
         sort?: 'recent' | 'popular';
     }>();
 
@@ -34,6 +37,11 @@ export default function VideoPlayerScreen() {
     const cleanType = (getStringParam(params.type) || 'trending') as FeedType;
     const cleanSort = getStringParam(params.sort) as 'recent' | 'popular' | undefined;
     const initialVideoId = getStringParam(params.initialVideoId);
+    const cleanVideoId = getStringParam(params.videoId);
+    const [commentsVideoId, setCommentsVideoId] = useState<string | null>(null);
+    useEffect(() => {
+        if (params.openComments === '1' && cleanVideoId) setCommentsVideoId(cleanVideoId);
+    }, [params.openComments, cleanVideoId]);
 
     console.log("VideoPlayerScreen clean params:", { cleanType, cleanSearchQuery, cleanHashtag, cleanUserId, cleanSort, initialVideoId });
 
@@ -46,6 +54,7 @@ export default function VideoPlayerScreen() {
     } = useVideos({
         type: cleanType,
         userId: cleanUserId,
+        videoId: cleanVideoId,
         hashtag: cleanHashtag,
         searchQuery: cleanSearchQuery,
         sort: cleanSort
@@ -63,7 +72,7 @@ export default function VideoPlayerScreen() {
     };
 
     const handleComment = (videoId: string) => {
-        console.log('Comment on:', videoId);
+        setCommentsVideoId(videoId);
     };
 
     const handleSave = (videoId: string) => {
@@ -124,6 +133,7 @@ export default function VideoPlayerScreen() {
                 onSelect={(id) => console.log('Selected:', id)}
                 initialScrollIndex={initialScrollIndex}
             />
+            <CommentsModal visible={!!commentsVideoId} videoId={commentsVideoId} onClose={() => setCommentsVideoId(null)} />
 
             {/* Back Button Overlay */}
             <TouchableOpacity
