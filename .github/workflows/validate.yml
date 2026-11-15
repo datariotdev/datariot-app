@@ -1,9 +1,16 @@
 name: Validate app
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/validate.yml'
+      - 'src/**'
+      - 'scripts/test-user-search.cjs'
+      - 'package*.json'
   push:
     paths:
       - '.github/workflows/validate.yml'
       - 'src/**'
+      - 'scripts/test-user-search.cjs'
       - 'package*.json'
   workflow_dispatch:
 permissions:
