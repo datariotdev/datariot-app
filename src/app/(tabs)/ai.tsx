@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, withDelay, Easing } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '../../components/Theme/ThemeProvider';
-import { generateVideoAnalysis, chatWithAI, generateDailyInsight, VideoAnalysis, DailyInsight } from '../../lib/ai/client';
+import { generateVideoAnalysis, chatWithAI, generateDailyInsight, orvelisErrorMessage, VideoAnalysis, DailyInsight } from '../../lib/ai/client';
 
 const { width } = Dimensions.get('window');
 
@@ -257,113 +257,59 @@ export default function AIScreen() {
         }, 150);
     }, []);
 
-    const handleExamplePrompt = (prompt: typeof EXAMPLE_PROMPTS[0]) => {
-        setShowSuggestions(false);
-        setSelectedTool(prompt.tool);
+    const [requestError, setRequestError] = useState('');
+    const sending = useRef(false);
 
-        if (prompt.tool === 'chat') {
-            // Immediately send as a message
-            const userMsg: Message = { id: uniqueId(), role: 'user', content: prompt.text, type: 'text' };
-            setMessages(prev => [...prev, userMsg]);
-            setLoading(true);
-            scrollToBottom();
-
-            const history = messages.map(m => ({ role: m.role, content: m.content }));
-            chatWithAI(prompt.text, history).then(response => {
-                setMessages(prev => [...prev, {
-                    id: uniqueId(),
-                    role: 'assistant',
-                    content: response,
-                    type: 'text'
-                }]);
-            }).catch(console.error).finally(() => {
-                setLoading(false);
-                scrollToBottom();
-            });
-        } else {
-            handleToolSelect(prompt.tool);
-        }
-    };
-
-    const handleSendMessage = async () => {
-        if (!inputText.trim()) return;
-
-        // Hide suggestions after first message
-        setShowSuggestions(false);
-
-        const userMsg: Message = { id: uniqueId(), role: 'user', content: inputText, type: 'text' };
-        setMessages(prev => [...prev, userMsg]);
-        const textToSend = inputText;
-        setInputText('');
+    const runRequest = async (tool: ToolType, text: string) => {
+        if (sending.current) return;
+        sending.current = true;
+        setRequestError('');
         setLoading(true);
+        setShowSuggestions(false);
+
+        const history = messages.filter(message => message.id !== 'init')
+            .map(({ role, content }) => ({ role, content }));
+        const userMessage = text ? { id: uniqueId(), role: 'user' as const, content: text, type: 'text' as const } : null;
+        if (userMessage) setMessages(prev => [...prev, userMessage]);
+        setInputText('');
         scrollToBottom();
 
         try {
-            const history = messages.map(m => ({ role: m.role, content: m.content }));
-            const response = await chatWithAI(textToSend, history);
-
-            setMessages(prev => [...prev, {
-                id: uniqueId(),
-                role: 'assistant',
-                content: response,
-                type: 'text'
-            }]);
-        } catch (e) {
-            console.error(e);
-            setMessages(prev => [...prev, {
-                id: uniqueId(),
-                role: 'assistant',
-                content: "Connection disrupted. I'm operating in local mode — try again or ask me something I can handle offline.",
-                type: 'text'
-            }]);
+            let reply: Message = { id: uniqueId(), role: 'assistant', content: '', type: 'text' };
+            if (tool === 'insight') {
+                reply = { ...reply, content: 'Daily insight', type: 'insight', data: await generateDailyInsight(text) };
+            } else if (tool === 'analyze') {
+                reply = { ...reply, content: 'Content analysis', type: 'analysis', data: await generateVideoAnalysis(text, history) };
+            } else {
+                reply.content = await chatWithAI(text, history);
+            }
+            setMessages(prev => [...prev, reply]);
+        } catch (error) {
+            if (userMessage) setMessages(prev => prev.filter(message => message.id !== userMessage.id));
+            setInputText(text);
+            setRequestError(orvelisErrorMessage(error));
         } finally {
+            sending.current = false;
             setLoading(false);
             scrollToBottom();
         }
     };
 
-    const handleToolSelect = async (tool: ToolType) => {
+    const handleToolSelect = (tool: ToolType) => {
+        if (sending.current) return;
         setSelectedTool(tool);
         setShowSuggestions(false);
+        if (tool === 'insight') void runRequest(tool, '');
+    };
 
-        if (tool === 'insight') {
-            setLoading(true);
-            scrollToBottom();
-            try {
-                const insight = await generateDailyInsight();
-                setMessages(prev => [...prev, {
-                    id: uniqueId(),
-                    role: 'assistant',
-                    content: 'Daily Insight Generated',
-                    type: 'insight',
-                    data: insight
-                }]);
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(false);
-                scrollToBottom();
-            }
-        } else if (tool === 'analyze') {
-            setLoading(true);
-            scrollToBottom();
-            try {
-                const analysis = await generateVideoAnalysis();
-                setMessages(prev => [...prev, {
-                    id: uniqueId(),
-                    role: 'assistant',
-                    content: 'Analysis Complete',
-                    type: 'analysis',
-                    data: analysis
-                }]);
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(false);
-                scrollToBottom();
-            }
-        }
-        // For 'chat', just switch tool — don't trigger anything
+    const handleExamplePrompt = (prompt: typeof EXAMPLE_PROMPTS[0]) => {
+        handleToolSelect(prompt.tool);
+        if (prompt.tool === 'chat') void runRequest('chat', prompt.text);
+    };
+
+    const handleSendMessage = () => {
+        const text = inputText.trim();
+        if (text) void runRequest(selectedTool, text);
     };
 
     const renderMessage = ({ item }: { item: Message }) => {
@@ -466,7 +412,7 @@ export default function AIScreen() {
     const getPlaceholder = () => {
         switch (selectedTool) {
             case 'insight': return "Ask about your insight...";
-            case 'analyze': return "Ask about the analysis...";
+            case 'analyze': return "Paste a claim or transcript to analyze…";
             default: return "Ask Orvelis anything...";
         }
     };
@@ -574,6 +520,7 @@ export default function AIScreen() {
 
                     {/* Input Area — always editable */}
                     <View style={[styles.inputContainer, { borderTopColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
+                        {requestError !== '' && <Text accessibilityRole="alert" style={{ color: theme.colors.text.primary }}>{requestError}</Text>}
                         <View style={[styles.inputWrapper, {
                             backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
                             borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
