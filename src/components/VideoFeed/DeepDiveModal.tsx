@@ -16,7 +16,7 @@ import {
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../Theme/ThemeProvider';
-import { generateDeepDive, chatWithVideo, DeepDiveData, DeepDiveMessage } from '../../lib/ai/client';
+import { generateDeepDive, chatWithVideo, orvelisErrorMessage, DeepDiveMessage } from '../../lib/ai/client';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, withDelay } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
@@ -63,7 +63,12 @@ export function DeepDiveModal({ visible, video, onClose }: DeepDiveModalProps) {
 
     const [activeTab, setActiveTab] = useState<TabType>('summary');
     const [loading, setLoading] = useState(false);
-    const [deepDiveData, setDeepDiveData] = useState<DeepDiveData | null>(null);
+    const [deepDiveData, setDeepDiveData] = useState<Awaited<ReturnType<typeof generateDeepDive>> | null>(null);
+    const [summaryError, setSummaryError] = useState('');
+    const [chatError, setChatError] = useState('');
+    const [summaryAttempt, setSummaryAttempt] = useState(0);
+    const requestVersion = useRef(0);
+    const videoId = video?.id as string | undefined;
 
     // Q&A Chat State
     const [chatHistory, setChatHistory] = useState<DeepDiveMessage[]>([]);
@@ -73,65 +78,54 @@ export function DeepDiveModal({ visible, video, onClose }: DeepDiveModalProps) {
     const chatListRef = useRef<FlatList>(null);
     const chatInputRef = useRef<TextInput>(null);
 
-    // Load AI deep dive content on video change
     useEffect(() => {
-        if (visible && video) {
-            setLoading(true);
-            setDeepDiveData(null);
-            setChatHistory([
-                {
-                    role: 'assistant',
-                    content: `Hello! I'm **Orvelis**, your logic partner. I've scanned **"${video.title || 'this video'}"**. Ask me any clarifying questions, or review the tabs above for a full brief.`,
-                }
-            ]);
-            setActiveTab('summary');
+        if (!visible || !videoId) return;
+        setActiveTab('summary');
+        setChatHistory([]);
+        setInputText('');
+        setChatError('');
+        setChatLoading(false);
+        return () => { requestVersion.current += 1; };
+    }, [visible, videoId]);
 
-            generateDeepDive(video.title || 'Educational Topic', video.description || '')
-                .then((data) => {
-                    setDeepDiveData(data);
-                })
-                .catch((err) => {
-                    console.error('Deep Dive fetch error:', err);
-                })
-                .finally(() => {
-                    setLoading(false);
-                });
-        }
-    }, [visible, video]);
+    useEffect(() => {
+        if (!visible || !videoId) return;
+        let active = true;
+        setLoading(true);
+        setDeepDiveData(null);
+        setSummaryError('');
+        generateDeepDive(videoId)
+            .then(data => { if (active) setDeepDiveData(data); })
+            .catch(error => { if (active) setSummaryError(orvelisErrorMessage(error)); })
+            .finally(() => { if (active) setLoading(false); });
+        return () => { active = false; };
+    }, [visible, videoId, summaryAttempt]);
 
     const handleSendMessage = async () => {
-        if (!inputText.trim() || !video) return;
-
-        const userMsg: DeepDiveMessage = { role: 'user', content: inputText };
-        setChatHistory(prev => [...prev, userMsg]);
-        const textToSend = inputText;
+        const textToSend = inputText.trim();
+        if (!textToSend || !videoId || chatLoading) return;
+        const version = requestVersion.current;
+        setChatError('');
+        setChatHistory(prev => [...prev, { role: 'user', content: textToSend }]);
         setInputText('');
         setChatLoading(true);
-
-        // Scroll to bottom
         setTimeout(() => chatListRef.current?.scrollToEnd({ animated: true }), 100);
 
         try {
-            const formattedHistory = chatHistory.map(h => ({
-                role: h.role,
-                content: h.content
-            }));
-            const response = await chatWithVideo(
-                video.title || 'Video Topic',
-                video.description || '',
-                textToSend,
-                formattedHistory
-            );
-            setChatHistory(prev => [...prev, { role: 'assistant', content: response }]);
-        } catch (e) {
-            console.error('Video Chat error:', e);
-            setChatHistory(prev => [...prev, {
-                role: 'assistant',
-                content: "Apologies, my synaptic bridge is experiencing latency. Let's try that question again.",
-            }]);
+            const response = await chatWithVideo(videoId, textToSend, chatHistory);
+            if (version === requestVersion.current) {
+                setChatHistory(prev => [...prev, { role: 'assistant', content: response }]);
+            }
+        } catch (error) {
+            if (version !== requestVersion.current) return;
+            setChatHistory(prev => prev.slice(0, -1));
+            setInputText(textToSend);
+            setChatError(orvelisErrorMessage(error));
         } finally {
-            setChatLoading(false);
-            setTimeout(() => chatListRef.current?.scrollToEnd({ animated: true }), 150);
+            if (version === requestVersion.current) {
+                setChatLoading(false);
+                setTimeout(() => chatListRef.current?.scrollToEnd({ animated: true }), 150);
+            }
         }
     };
 
@@ -226,10 +220,17 @@ export function DeepDiveModal({ visible, video, onClose }: DeepDiveModalProps) {
                     </View>
 
                     {/* Content Section */}
-                    {loading ? (
+                    {loading && activeTab !== 'chat' ? (
                         <View style={styles.loaderContainer}>
                             <ActivityIndicator size="large" color={theme.colors.primary.DEFAULT} />
-                            <Text style={[styles.loaderText, { color: subtitleColor }]}>Synthesizing cognitive models...</Text>
+                            <Text style={[styles.loaderText, { color: subtitleColor }]}>Reading the clip…</Text>
+                        </View>
+                    ) : summaryError && activeTab !== 'chat' ? (
+                        <View style={styles.loaderContainer}>
+                            <Text style={[styles.loaderText, { color: subtitleColor }]}>{summaryError}</Text>
+                            <TouchableOpacity onPress={() => setSummaryAttempt(attempt => attempt + 1)}>
+                                <Text style={[styles.loaderText, { color: theme.colors.primary.DEFAULT }]}>Try again</Text>
+                            </TouchableOpacity>
                         </View>
                     ) : (
                         <View style={styles.contentWrapper}>
@@ -239,10 +240,12 @@ export function DeepDiveModal({ visible, video, onClose }: DeepDiveModalProps) {
                                         <Text style={[styles.sectionTitle, { color: theme.colors.primary.DEFAULT }]}>CONCEPT BRIEF</Text>
                                         <View style={[styles.cardContainer, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0,0,0,0.02)', borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]}>
                                             <Text style={[styles.summaryText, { color: textColor }]}>
-                                                {deepDiveData?.summary || 'Generating summary summary details...'}
+                                                {deepDiveData?.summary}
                                             </Text>
                                         </View>
 
+                                        {deepDiveData?.context === 'transcript' && <Text style={{ color: subtitleColor }}>Based on the audio transcript.</Text>}
+                                        {deepDiveData?.context === 'metadata' && <Text style={{ color: subtitleColor }}>Only the title and description were available.</Text>}
                                         <Text style={[styles.sectionTitle, { color: theme.colors.primary.DEFAULT, marginTop: 24 }]}>KEY TERMINOLOGY</Text>
                                         {deepDiveData?.keyTerms.map((term, index) => (
                                             <View
@@ -321,6 +324,7 @@ export function DeepDiveModal({ visible, video, onClose }: DeepDiveModalProps) {
                                     />
 
                                     {/* Input bar */}
+                                    {chatError !== '' && <Text accessibilityRole="alert" style={{ color: subtitleColor }}>{chatError}</Text>}
                                     <View style={[styles.inputRow, { borderTopColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', paddingBottom: insets.bottom + 8 }]}>
                                         <TextInput
                                             ref={chatInputRef}

@@ -9,7 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../lib/supabase/hooks/useAuth';
 import { VIDEO_CATEGORIES, CATEGORY_DISPLAY_NAMES, VideoCategory } from '../lib/constants/categories';
 import { supabase } from '../lib/supabase/client';
-import { generateDebateSeed, generateVideoAnalysis, DebateSeed } from '../lib/ai/client';
+import { generateDebateSeed, DebateSeed } from '../lib/ai/client';
 import { useTheme } from '../components/Theme/ThemeProvider';
 
 const showAlert = (title: string, message: string) => {
@@ -262,38 +262,6 @@ export default function PublishScreen() {
         }
     };
 
-    // Verification State
-    const [isVerifying, setIsVerifying] = useState(false);
-    const [verificationStatus, setVerificationStatus] = useState<'idle' | 'verified' | 'rejected'>('idle');
-
-    useEffect(() => {
-        if (videoUri) {
-            verifyVideoContent();
-        } else {
-            setVerificationStatus('idle');
-        }
-    }, [videoUri]);
-
-    const verifyVideoContent = async () => {
-        setIsVerifying(true);
-        setVerificationStatus('idle');
-
-        try {
-            // Real AI Analysis
-            const analysis = await generateVideoAnalysis();
-            if (analysis) {
-                setVerificationStatus('verified');
-            } else {
-                setVerificationStatus('rejected');
-            }
-        } catch (error) {
-            console.error("AI Verification error:", error);
-            setVerificationStatus('idle');
-        } finally {
-            setIsVerifying(false);
-        }
-    };
-
     const handleAISuggest = async () => {
         setSuggesting(true);
         try {
@@ -301,7 +269,6 @@ export default function PublishScreen() {
             if (seed) {
                 setCaption(seed.thesis);
                 setAiSeed(seed);
-                setVerificationStatus('verified');
             }
         } catch (error) {
             console.error("AI Suggestion error:", error);
@@ -324,13 +291,13 @@ export default function PublishScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                     onPress={handlePost}
-                    disabled={uploading || isVerifying || (isVideoSelection && verificationStatus !== 'verified')}
+                    disabled={uploading}
                     style={[
                         styles.postButton,
                         {
                             backgroundColor: isDark ? '#D9E4FF' : '#4C6EF5',
                         },
-                        (uploading || isVerifying || (isVideoSelection && verificationStatus !== 'verified')) && styles.disabledButton
+                        (uploading) && styles.disabledButton
                     ]}
                 >
                     {uploading ? (
@@ -433,32 +400,7 @@ export default function PublishScreen() {
                                 nativeControls={false}
                             />
 
-                            {/* Verification Overlay */}
-                            {isVerifying && (
-                                <View style={styles.verificationOverlay}>
-                                    <ActivityIndicator size="large" color={isDark ? '#D9E4FF' : '#4C6EF5'} />
-                                    <Text style={[styles.verificationText, { fontFamily: theme.typography.fontFamilies.medium }]}>Verifying AI Content...</Text>
-                                </View>
-                            )}
 
-                            {/* Verification Badges */}
-                            {!isVerifying && verificationStatus === 'verified' && (
-                                <View style={[styles.videoBadge, { backgroundColor: 'rgba(34, 197, 94, 0.9)' }]}>
-                                    <Ionicons name="checkmark-circle" size={14} color="white" />
-                                    <Text style={[styles.videoBadgeText, { fontFamily: theme.typography.fontFamilies.bold }]}>AI Verified</Text>
-                                </View>
-                            )}
-
-                            {!isVerifying && verificationStatus === 'rejected' && (
-                                <View style={styles.errorOverlay}>
-                                    <Ionicons name="alert-circle" size={48} color="#ef4444" />
-                                    <Text style={[styles.errorTitle, { fontFamily: theme.typography.fontFamilies.bold }]}>Verification Failed</Text>
-                                    <Text style={[styles.errorText, { fontFamily: theme.typography.fontFamilies.regular }]}>
-                                        This video does not appear to be high-quality content.
-                                        Please upload engaging short videos only.
-                                    </Text>
-                                </View>
-                            )}
                         </View>
                     )}
 
@@ -696,22 +638,6 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
     },
-    videoBadge: {
-        position: 'absolute',
-        top: 10,
-        right: 10,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 4,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    videoBadgeText: {
-        color: 'white',
-        fontSize: 10,
-        fontWeight: 'bold',
-    },
 
     imagePreviewContainer: {
         marginHorizontal: 20,
@@ -791,40 +717,6 @@ const styles = StyleSheet.create({
         color: '#ef4444',
         marginLeft: 'auto',
         fontWeight: 'bold',
-    },
-    verificationOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.7)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 10,
-    },
-    verificationText: {
-        color: '#FFF',
-        marginTop: 10,
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    errorOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.85)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 10,
-        padding: 20,
-    },
-    errorTitle: {
-        color: '#ef4444',
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginTop: 10,
-        marginBottom: 5,
-    },
-    errorText: {
-        color: '#ccc',
-        fontSize: 14,
-        textAlign: 'center',
-        lineHeight: 20,
     },
     aiSuggestBtn: {
         flexDirection: 'row',
