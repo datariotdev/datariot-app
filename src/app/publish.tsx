@@ -7,7 +7,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { useAudioRecorder, useAudioPlayer, requestRecordingPermissionsAsync, RecordingPresets, useAudioPlayerStatus } from 'expo-audio';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../lib/supabase/hooks/useAuth';
-import { VIDEO_CATEGORIES, CATEGORY_DISPLAY_NAMES, VideoCategory } from '../lib/constants/categories';
+import { ANIMATED_SHORTS_CATEGORY, PUBLISH_VIDEO_CATEGORIES, CATEGORY_DISPLAY_NAMES, VideoCategory } from '../lib/constants/categories';
 import { supabase } from '../lib/supabase/client';
 import { generateDebateSeed, generateVideoAnalysis, DebateSeed } from '../lib/ai/client';
 import { useTheme } from '../components/Theme/ThemeProvider';
@@ -31,6 +31,7 @@ export default function PublishScreen() {
     const [caption, setCaption] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<VideoCategory | null>(null);
     const [uploading, setUploading] = useState(false);
+    const isAnimatedShort = !!videoUri && !debateId && selectedCategory === ANIMATED_SHORTS_CATEGORY;
 
     // New Media State
     const [imageUri, setImageUri] = useState<string | null>(null);
@@ -111,6 +112,11 @@ export default function PublishScreen() {
 
     // --- Posting ---
     const handlePost = async () => {
+        if (isAnimatedShort && !caption.trim()) {
+            showAlert('Add a title', 'Give your animated short a title before publishing.');
+            return;
+        }
+
         const hasMedia = videoUri || imageUri || audioUri;
         if (!caption.trim() && !hasMedia) {
             showAlert('Empty Post', 'Please write something or attach media.');
@@ -206,7 +212,7 @@ export default function PublishScreen() {
                         .from('videos')
                         .insert({
                             user_id: user.id,
-                            title: caption.substring(0, 50) || 'New Short Video',
+                            title: caption.trim().substring(0, 50) || 'New Short Video',
                             description: caption,
                             url: uploadedVideoUrl,
                             category: selectedCategory,
@@ -218,34 +224,36 @@ export default function PublishScreen() {
                     uploadedImageUrl = await uploadFile(imageUri, 'posts', fileName);
                 }
 
-                const { data: postData, error: postError } = await supabase
-                    .from('posts')
-                    .insert({
-                        user_id: user.id,
-                        content: caption,
-                        image_url: uploadedImageUrl,
-                        is_published: true,
-                        video_url: videoUri ? uploadedVideoUrl : null
-                    })
-                    .select('id')
-                    .single();
+                if (!isAnimatedShort) {
+                    const { data: postData, error: postError } = await supabase
+                        .from('posts')
+                        .insert({
+                            user_id: user.id,
+                            content: caption,
+                            image_url: uploadedImageUrl,
+                            is_published: true,
+                            video_url: videoUri ? uploadedVideoUrl : null
+                        })
+                        .select('id')
+                        .single();
 
-                if (postError) {
-                    console.error("Post insert error:", postError);
-                    throw postError;
-                }
+                    if (postError) {
+                        console.error("Post insert error:", postError);
+                        throw postError;
+                    }
 
-                // AI Seeding: Insert generated arguments
-                if (aiSeed && postData) {
-                    const aiArgs = aiSeed.arguments.map(arg => ({
-                        post_id: postData.id,
-                        user_id: user.id,
-                        text: `AI_ORACLE:|${arg.side}:|${arg.text}`,
-                        likes_count: arg.strength,
-                        is_published: true
-                    }));
+                    // AI Seeding: Insert generated arguments
+                    if (aiSeed && postData) {
+                        const aiArgs = aiSeed.arguments.map(arg => ({
+                            post_id: postData.id,
+                            user_id: user.id,
+                            text: `AI_ORACLE:|${arg.side}:|${arg.text}`,
+                            likes_count: arg.strength,
+                            is_published: true
+                        }));
 
-                    await supabase.from('comments').insert(aiArgs);
+                        await supabase.from('comments').insert(aiArgs);
+                    }
                 }
             }
 
@@ -374,12 +382,10 @@ export default function PublishScreen() {
                             {
                                 color: theme.colors.text.primary,
                                 fontFamily: theme.typography.fontFamilies.regular,
-                                // @ts-ignore - Web outline reset
-                                outlineStyle: 'none',
                                 outlineWidth: 0,
                             }
                         ]}
-                        placeholder={isVideoSelection ? "Write a caption..." : "State your thesis..."}
+                        placeholder={isAnimatedShort ? 'Title your short…' : isVideoSelection ? 'Write a caption…' : 'State your thesis…'}
                         placeholderTextColor={theme.colors.text.muted}
                         multiline
                         value={caption}
@@ -515,7 +521,7 @@ export default function PublishScreen() {
                         <View style={styles.categorySection}>
                             <Text style={[styles.sectionTitle, { color: theme.colors.text.secondary, fontFamily: theme.typography.fontFamilies.bold }]}>Select Category</Text>
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryList}>
-                                {VIDEO_CATEGORIES.map((cat) => (
+                                {PUBLISH_VIDEO_CATEGORIES.filter(cat => !debateId || cat !== ANIMATED_SHORTS_CATEGORY).map((cat) => (
                                     <TouchableOpacity
                                         key={cat}
                                         onPress={() => setSelectedCategory(cat)}

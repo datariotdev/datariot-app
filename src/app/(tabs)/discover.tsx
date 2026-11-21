@@ -65,6 +65,21 @@ export default function DiscoverScreen() {
                 <Text style={[styles.heroSubtitle,{color:theme.colors.text.secondary}]}>Ideas, creators and debates beyond your usual feed.</Text>
                 <View style={styles.heroActions}><Pressable onPress={() => setSearchQuery('AI')} style={styles.heroChip}><Ionicons name="hardware-chip-outline" size={15} color="#fff"/><Text style={styles.heroChipText}>Artificial intelligence</Text></Pressable><Pressable onPress={() => setSearchQuery('Science')} style={[styles.heroChip,{backgroundColor:'#7259D8'}]}><Text style={styles.heroChipText}>Science</Text></Pressable></View>
             </LinearGradient>}
+
+            {!searchQuery && (
+                <Pressable
+                    accessibilityRole="link"
+                    onPress={() => router.push('/animated-shorts')}
+                    style={[styles.shortsLink, { backgroundColor: isDark ? '#19243A' : '#EAF0FA' }]}
+                >
+                    <Ionicons name="film-outline" size={25} color={theme.colors.text.primary} />
+                    <View style={styles.shortsCopy}>
+                        <Text style={[styles.shortsTitle, { color: theme.colors.text.primary }]}>Animated Shorts</Text>
+                        <Text style={{ color: theme.colors.text.secondary }}>Short cartoons that explain how things work.</Text>
+                    </View>
+                    <Ionicons name="arrow-forward" size={19} color={theme.colors.text.primary} />
+                </Pressable>
+            )}
             {/* 1. Trending Topics (Primary Hierarchy) */}
             {!searchQuery && (
                 <View style={styles.sectionPadding}>
@@ -187,6 +202,9 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     discoveryHero: { marginHorizontal: 18, marginTop: 12, marginBottom: 16, borderRadius: 28, padding: 24, overflow: 'hidden' },
+    shortsLink: { flexDirection: 'row', alignItems: 'center', gap: 13, marginHorizontal: 18, borderRadius: 18, padding: 16 },
+    shortsCopy: { flex: 1 },
+    shortsTitle: { fontSize: 18, fontWeight: '700', marginBottom: 3 },
     heroEyebrow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
     heroEyebrowText: { fontSize: 11, fontWeight: '800', letterSpacing: 1.6 },
     heroTitle: { fontSize: 30, lineHeight: 35, fontWeight: '800', letterSpacing: -1.2, maxWidth: 300 },
