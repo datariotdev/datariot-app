@@ -135,7 +135,8 @@ export default function EditorScreen() {
             params: {
                 videoUri,
                 trimStart,
-                trimEnd
+                trimEnd,
+                ...(typeof params.category === 'string' ? { category: params.category } : {}),
             }
         });
     };

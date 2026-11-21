@@ -29,7 +29,9 @@ export default function PublishScreen() {
     const isDark = mode === 'dark';
 
     const [caption, setCaption] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState<VideoCategory | null>(null);
+    const [selectedCategory, setSelectedCategory] = useState<VideoCategory | null>(
+        videoUri && !debateId && params.category === ANIMATED_SHORTS_CATEGORY ? ANIMATED_SHORTS_CATEGORY : null,
+    );
     const [uploading, setUploading] = useState(false);
     const isAnimatedShort = !!videoUri && !debateId && selectedCategory === ANIMATED_SHORTS_CATEGORY;
 
@@ -275,12 +277,12 @@ export default function PublishScreen() {
     const [verificationStatus, setVerificationStatus] = useState<'idle' | 'verified' | 'rejected'>('idle');
 
     useEffect(() => {
-        if (videoUri) {
+        if (videoUri && !isAnimatedShort) {
             verifyVideoContent();
         } else {
             setVerificationStatus('idle');
         }
-    }, [videoUri]);
+    }, [videoUri, isAnimatedShort]);
 
     const verifyVideoContent = async () => {
         setIsVerifying(true);
@@ -320,6 +322,7 @@ export default function PublishScreen() {
     };
 
     const isVideoSelection = !!videoUri;
+    const canPost = !uploading && (isAnimatedShort || (!isVerifying && (!isVideoSelection || verificationStatus === 'verified')));
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background.primary }]} edges={['top']}>
@@ -332,13 +335,13 @@ export default function PublishScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                     onPress={handlePost}
-                    disabled={uploading || isVerifying || (isVideoSelection && verificationStatus !== 'verified')}
+                    disabled={!canPost}
                     style={[
                         styles.postButton,
                         {
                             backgroundColor: isDark ? '#D9E4FF' : '#4C6EF5',
                         },
-                        (uploading || isVerifying || (isVideoSelection && verificationStatus !== 'verified')) && styles.disabledButton
+                        !canPost && styles.disabledButton
                     ]}
                 >
                     {uploading ? (
@@ -394,7 +397,7 @@ export default function PublishScreen() {
                     />
 
                     {/* AI Suggestion Button */}
-                    <TouchableOpacity
+                    {!isAnimatedShort && <TouchableOpacity
                         style={[
                             styles.aiSuggestBtn,
                             {
@@ -420,7 +423,7 @@ export default function PublishScreen() {
                                 </Text>
                             </>
                         )}
-                    </TouchableOpacity>
+                    </TouchableOpacity>}
 
                     {/* PREVIEWS */}
                     {isVideoSelection && (
@@ -440,7 +443,7 @@ export default function PublishScreen() {
                             />
 
                             {/* Verification Overlay */}
-                            {isVerifying && (
+                            {!isAnimatedShort && isVerifying && (
                                 <View style={styles.verificationOverlay}>
                                     <ActivityIndicator size="large" color={isDark ? '#D9E4FF' : '#4C6EF5'} />
                                     <Text style={[styles.verificationText, { fontFamily: theme.typography.fontFamilies.medium }]}>Verifying AI Content...</Text>
@@ -448,14 +451,14 @@ export default function PublishScreen() {
                             )}
 
                             {/* Verification Badges */}
-                            {!isVerifying && verificationStatus === 'verified' && (
+                            {!isAnimatedShort && !isVerifying && verificationStatus === 'verified' && (
                                 <View style={[styles.videoBadge, { backgroundColor: 'rgba(34, 197, 94, 0.9)' }]}>
                                     <Ionicons name="checkmark-circle" size={14} color="white" />
                                     <Text style={[styles.videoBadgeText, { fontFamily: theme.typography.fontFamilies.bold }]}>AI Verified</Text>
                                 </View>
                             )}
 
-                            {!isVerifying && verificationStatus === 'rejected' && (
+                            {!isAnimatedShort && !isVerifying && verificationStatus === 'rejected' && (
                                 <View style={styles.errorOverlay}>
                                     <Ionicons name="alert-circle" size={48} color="#ef4444" />
                                     <Text style={[styles.errorTitle, { fontFamily: theme.typography.fontFamilies.bold }]}>Verification Failed</Text>

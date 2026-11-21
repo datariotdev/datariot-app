@@ -153,7 +153,7 @@ export default function AnimatedShortsScreen() {
                 ListHeaderComponent={(
                     <>
                         <View style={[styles.hero, { backgroundColor: paper }]}>
-                            <Text style={[styles.title, { color: ink }]}>Animated Shorts</Text>
+                            <Text accessibilityRole="header" style={[styles.title, { color: ink }]}>Animated Shorts</Text>
                             <Text style={[styles.subtitle, { color: secondaryInk }]}>Little stories about how things work.</Text>
                         </View>
                         <Text style={[styles.heading, { color: ink }]}>Datariot pilots</Text>
@@ -162,7 +162,7 @@ export default function AnimatedShortsScreen() {
                         </View>
                         <View style={styles.communityHeader}>
                             <Text style={[styles.heading, { color: ink }]}>From creators</Text>
-                            <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/create')} style={[styles.upload, { backgroundColor: paper }]}>
+                            <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/(tabs)/create', params: { category: ANIMATED_SHORTS_CATEGORY } })} style={[styles.upload, { backgroundColor: paper }]}>
                                 <Ionicons name="add" size={18} color={ink} />
                                 <Text style={[styles.backText, { color: ink }]}>Upload a short</Text>
                             </Pressable>
