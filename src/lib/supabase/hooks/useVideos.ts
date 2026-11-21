@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../client';
 import { useAuth } from './useAuth';
 import { encodeVideoUrl } from '../../utils/url';
+import { ANIMATED_SHORTS_CATEGORY } from '../../constants/categories';
 
 export interface Video {
     id: string;
@@ -55,6 +56,7 @@ export function useVideos({ type, userId, searchQuery, hashtag, category, sort =
     const { user } = useAuth();
     const [videos, setVideos] = useState<Video[]>([]);
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [page, setPage] = useState(0);
     const [hasMore, setHasMore] = useState(true);
@@ -70,7 +72,9 @@ export function useVideos({ type, userId, searchQuery, hashtag, category, sort =
             sanitizedTitle.toLowerCase().includes('название') || // "Title" in Russian
             /[а-яА-ЯёЁ]/.test(sanitizedTitle); // Detect any Cyrillic characters
 
-        const finalTitle = !isPlaceholder ? sanitizedTitle : `Orvelis ${video.category || 'Strategic'} Insight #${video.id.slice(0, 4)}`;
+        const finalTitle = video.category === ANIMATED_SHORTS_CATEGORY
+            ? (sanitizedTitle.trim() || 'Animated Short')
+            : !isPlaceholder ? sanitizedTitle : `Orvelis ${video.category || 'Strategic'} Insight #${video.id.slice(0, 4)}`;
 
         return {
             id: video.id,
@@ -88,7 +92,9 @@ export function useVideos({ type, userId, searchQuery, hashtag, category, sort =
             isLiked: isLiked,
             isSaved: false,
             isFollowing: false,
-            thumbnailUrl: video.thumbnail_url || video.thumbnail || `https://picsum.photos/seed/${video.id}/800/1200`,
+            thumbnailUrl: video.thumbnail_url || video.thumbnail || (video.category === ANIMATED_SHORTS_CATEGORY
+                ? undefined
+                : `https://picsum.photos/seed/${video.id}/800/1200`),
             category: video.category || null,
             dnaRationale: Math.random() > 0.5 ? "Matches your interest in Engineering & Dev" : "Popular in your local DNA community",
             isHighSynergy: (video.id.charCodeAt(0) % 10 < 7) || Math.random() > 0.3, // ~70-80% chance for synergy to ensure sections aren't empty
@@ -98,11 +104,13 @@ export function useVideos({ type, userId, searchQuery, hashtag, category, sort =
 
     const fetchVideos = useCallback(async (pageNum: number, isRefresh: boolean = false) => {
         if (!supabase) {
+            setFetchError(true);
             setLoading(false);
             setRefreshing(false);
             return;
         }
         try {
+            setFetchError(false);
             if (!isRefresh) setLoading(true);
 
             // 1. Fetch videos - Increased range to fetch more in case many are filtered out
@@ -132,6 +140,8 @@ export function useVideos({ type, userId, searchQuery, hashtag, category, sort =
 
             if (category) {
                 query = query.eq('category', category);
+            } else if (type !== 'user') {
+                query = query.or(`category.is.null,category.neq.${ANIMATED_SHORTS_CATEGORY}`);
             }
 
             const { data: videoData, error: videoError } = await query
@@ -292,6 +302,7 @@ export function useVideos({ type, userId, searchQuery, hashtag, category, sort =
 
             setHasMore(videoData.length === 12);
         } catch (error) {
+            setFetchError(true);
             console.error('Error fetching videos:', error);
         } finally {
             setLoading(false);
@@ -306,7 +317,7 @@ export function useVideos({ type, userId, searchQuery, hashtag, category, sort =
     }, [type, userId, searchQuery, hashtag, category, user, fetchVideos]);
 
     const loadMore = () => {
-        if (!loading && hasMore) {
+        if (!loading && !refreshing && !fetchError && hasMore) {
             const nextPage = page + 1;
             setPage(nextPage);
             fetchVideos(nextPage);
@@ -390,6 +401,7 @@ export function useVideos({ type, userId, searchQuery, hashtag, category, sort =
         videos,
         loading,
         refreshing,
+        fetchError,
         hasMore,
         loadMore,
         refresh,

@@ -13,9 +13,13 @@ export const VIDEO_CATEGORIES = [
     'Politics'
 ] as const;
 
-export type VideoCategory = typeof VIDEO_CATEGORIES[number];
+export const ANIMATED_SHORTS_CATEGORY = 'animated-shorts';
+export const PUBLISH_VIDEO_CATEGORIES = [ANIMATED_SHORTS_CATEGORY, ...VIDEO_CATEGORIES] as const;
+
+export type VideoCategory = typeof PUBLISH_VIDEO_CATEGORIES[number];
 
 export const CATEGORY_DISPLAY_NAMES: Record<VideoCategory, string> = {
+    [ANIMATED_SHORTS_CATEGORY]: 'Animated Shorts',
     'Sport': 'Sport',
     'E-sports': 'E-sports',
     'Engineering': 'Engineering',
